@@ -191,22 +191,12 @@ const ClusterTemplateMapper = (item) => {
     externalIP,
     backupPoint,
     certSANs: get(config, 'certSANs'),
-    localRegistry: get(config, 'localRegistry'),
+    imageRegistry: get(config, 'imageRegistry', ''),
     workerNodeVip: get(config, 'workerNodeVip'),
     kubernetesVersion,
     containerRuntimeType,
     [`${containerRuntimeType}Version`]: containerRuntimeVersion,
     [`${containerRuntimeType}RootDir`]: get(config, 'containerRuntime.rootDir'),
-    [`${containerRuntimeType}InsecureRegistry`]: get(
-      config,
-      'containerRuntime.insecureRegistry',
-      []
-    )
-      .filter((val) => !!val)
-      .map((val, index) => ({
-        value: val,
-        index,
-      })),
     // externalCa
     externalCA: !!(externalCaKey || externalCaCert),
     externalCaKey,

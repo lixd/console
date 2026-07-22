@@ -71,13 +71,6 @@ class Registry extends ModalAction {
     const defaultRegistry = get(this.item, 'containerRuntime.registries') ?? [];
 
     const registries = defaultRegistry.map((it, index) => {
-      if (it.insecureRegistry) {
-        return {
-          value: it.insecureRegistry,
-          index,
-        };
-      }
-
       const existItem = this.registryData.find(
         (r) => it.registryRef === r.name
       );
@@ -118,6 +111,15 @@ class Registry extends ModalAction {
         type: 'array-input',
         itemComponent: SelectWithInput,
         options: this.registryOptions,
+        validator: (_, value = []) => {
+          const invalid = value.some(
+            ({ value: host }) =>
+              !this.registryData.some((registry) => registry.host === host)
+          );
+          return invalid
+            ? Promise.reject(t('Please select a Registry resource'))
+            : Promise.resolve();
+        },
       },
     ];
   }
@@ -126,13 +128,9 @@ class Registry extends ModalAction {
     const { registries } = values;
     const formTemplate = this.item._originData;
 
-    const newRegistries = registries.map(({ value }) => {
-      const existItem = this.registryData.find(({ host }) => host === value);
-      return {
-        insecureRegistry: existItem ? '' : value, // 新增 insecureRegistry 传
-        registryRef: existItem ? existItem.name : '', // 已存在 registryRef 传 name
-      };
-    });
+    const newRegistries = registries.map(({ value }) => ({
+      registryRef: this.registryData.find(({ host }) => host === value).name,
+    }));
 
     set(formTemplate, 'containerRuntime.registries', newRegistries);
     const { name } = this.item;

@@ -17,7 +17,7 @@
 import { observer } from 'mobx-react';
 import BaseForm from 'components/Form';
 import { arrayInputValue } from 'utils';
-import { get, flatten, isEmpty } from 'lodash';
+import { get, isEmpty } from 'lodash';
 import { rootStore } from 'stores';
 
 export class ConfirmStep extends BaseForm {
@@ -96,10 +96,6 @@ export class ConfirmStep extends BaseForm {
     return [];
   }
 
-  formatRegistry(values) {
-    return flatten(arrayInputValue(values));
-  }
-
   containerRuntimeItem() {
     const {
       context: { containerRuntimeType, dockerVersion, containerdVersion },
@@ -113,11 +109,6 @@ export class ConfirmStep extends BaseForm {
           value: dockerVersion,
         },
         ...this.notFilled(t('Docker Data Path'), 'dockerRootDir'),
-        ...this.notFilled(
-          t('Docker Registry'),
-          'dockerInsecureRegistry',
-          this.formatRegistry
-        ),
       ];
     }
     return [
@@ -126,11 +117,6 @@ export class ConfirmStep extends BaseForm {
         value: containerdVersion,
       },
       ...this.notFilled(t('Containerd Data Path'), 'containerdRootDir'),
-      ...this.notFilled(
-        t('Containerd Registry'),
-        'containerdInsecureRegistry',
-        this.formatRegistry
-      ),
     ];
   }
 
@@ -240,7 +226,7 @@ export class ConfirmStep extends BaseForm {
         label: t('Image Type'),
         value: offline ? t('Offline') : t('Online'),
       },
-      ...this.notFilled(t('LocalRegistry'), 'localRegistry'),
+      ...this.notFilled(t('Image Registry'), 'imageRegistry'),
       {
         label: t('K8S Version'),
         value: kubernetesVersion,

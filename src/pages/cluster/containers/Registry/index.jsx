@@ -46,9 +46,9 @@ export default function Registry() {
 
   const currentProps = {
     columns,
-    authKey: 'localRegistry',
+    authKey: 'registries',
     module: 'registries',
-    name: t('LocalRegistry'),
+    name: t('Registry'),
     searchFilters: [],
     actionConfigs,
     store,

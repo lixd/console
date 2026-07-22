@@ -14,16 +14,14 @@
  *  limitations under the License.
  */
 import { observer } from 'mobx-react';
-import BaseForm from 'components/Form';
 import { toJS } from 'mobx';
+import BaseForm from 'components/Form';
 import { rootStore } from 'stores';
 import { fqdn } from 'utils/regex';
 import {
   isIPv4,
   isIpv6,
   isDomain,
-  isDomainPath,
-  isIpPort,
 } from 'utils/validate';
 import {
   clusterParams,
@@ -52,7 +50,7 @@ const {
 
 @observer
 export default class Cluster extends BaseForm {
-  init() {
+  async init() {
     this.store = clusterStore;
     this.nodeStore = nodeStore;
     this.regionStore = regionStore;
@@ -60,9 +58,11 @@ export default class Cluster extends BaseForm {
     this.backupPointStore = backupPointStore;
     this.templatesStore = templatesStore;
 
-    this.getCommonRegistry();
-    this.getBackupPoint();
-    this.getVersion();
+    await Promise.all([
+      this.getBackupPoint(),
+      this.registryStore.fetchList({ limit: -1 }),
+      this.getVersion(),
+    ]);
   }
 
   async getVersion() {
@@ -119,9 +119,11 @@ export default class Cluster extends BaseForm {
     const versions = isOffLine ? this.offlineVersions : this.onlineVersions;
     const [firstVersion] = versions;
     const currentVersions = this.getCurrentVersionsByK8s(firstVersion);
+    const imageRegistry = '';
 
     await this.updateContext({
       offline: isOffLine,
+      imageRegistry,
       kubernetesVersions: versions,
       kubernetesVersion: firstVersion?.value,
       ...currentVersions,
@@ -131,6 +133,7 @@ export default class Cluster extends BaseForm {
       kubernetesVersion: firstVersion?.value,
       ...currentVersions,
     });
+    this.updateFormValue('imageRegistry', imageRegistry);
   };
 
   updateFormVersions(versions) {
@@ -192,10 +195,6 @@ export default class Cluster extends BaseForm {
     }));
   }
 
-  async getCommonRegistry() {
-    await this.registryStore.fetchList();
-  }
-
   async getBackupPoint() {
     await this.backupPointStore.fetchList();
   }
@@ -206,6 +205,13 @@ export default class Cluster extends BaseForm {
       label: item.name,
     }));
     return options;
+  }
+
+  get registryOptions() {
+    return toJS(this.registryStore.list.data || []).map(({ name, host, scheme }) => ({
+      value: name,
+      label: `${name} (${scheme}://${host})`,
+    }));
   }
 
   getCurrentVersionsByK8s = (kubernetesVersion) => {
@@ -234,14 +240,6 @@ export default class Cluster extends BaseForm {
     return (data || []).map(({ version }) => ({
       value: version,
       label: version,
-    }));
-  }
-
-  getRegistryOptions() {
-    const data = toJS(this.registryStore.list.data);
-    return (data || []).map(({ host }) => ({
-      value: host,
-      label: host,
     }));
   }
 
@@ -347,43 +345,10 @@ export default class Cluster extends BaseForm {
     return Promise.resolve(true);
   };
 
-  checkk8sRegistry = (rule, value) => {
-    if (!value) return Promise.resolve(true);
-
-    const checkFunc = (item) => {
-      if (!item) return true;
-      if (isDomain(item) || isIPv4(item) || isIpPort(item)) {
-        return true;
-      }
-      return false;
-    };
-
-    if (!checkFunc(value)) {
-      return Promise.reject(t('Please enter a legal registry'));
-    }
-
-    return Promise.resolve(true);
-  };
-
-  checkRegistry = (rule, value) => {
-    if (!value) return Promise.resolve(true);
-
-    const checkFunc = (item) => {
-      if (!item) return true;
-      if (isDomain(item) || isIPv4(item) || isIpPort(item)) {
-        return true;
-      }
-      return false;
-    };
-
-    const isInValide = value.some((it) => !checkFunc(it.value));
-
-    if (isInValide) {
-      return Promise.reject(t('Please enter a legal registry'));
-    }
-
-    return Promise.resolve(true);
-  };
+  checkImageRegistry = (rule, value) =>
+    !value && this.isOffLine
+      ? Promise.reject(t('Please select a Registry resource'))
+      : Promise.resolve(true);
 
   checkLabels = (rule, value = []) => {
     const checkFunc = (item) => {
@@ -403,56 +368,12 @@ export default class Cluster extends BaseForm {
     return Promise.resolve(true);
   };
 
-  updateInsecureRegistry = (value, type) => {
-    const checkFunc = (item) => {
-      if (!item) return false;
-      if (
-        isDomain(item) ||
-        isDomainPath(item) ||
-        isIPv4(item) ||
-        isIpPort(item)
-      ) {
-        return true;
-      }
-      return false;
-    };
-
-    const getInsecureRegistry = (isDocker) =>
-      isDocker ? 'dockerInsecureRegistry' : 'containerdInsecureRegistry';
-
-    let updateFormKey = getInsecureRegistry(this.isDocker);
-    if (type) {
-      updateFormKey = getInsecureRegistry(type === 'docker');
-    }
-
-    if (checkFunc(value)) {
-      this.updateFormValue(updateFormKey, [
-        { index: 0, value, disabled: true },
-      ]);
-    }
-  };
-
-  onK8SRegistryChange = (e) => {
-    this.updateInsecureRegistry(e);
-  };
-
-  get localRegistryValue() {
-    return this.getFormInstance().getFieldValue('localRegistry');
-  }
-
-  onRunTimeTypeChange = (type) => {
-    if (this.isOffLine) {
-      this.updateInsecureRegistry(this.localRegistryValue, type);
-    }
-  };
-
   onK8SVersionChange = async (value) => {
     const isAfter20 = versionCompare('v1.20.0', value) <= 0;
     const isAfter24 = versionCompare('v1.24.0', value) <= 0;
 
     const containerRuntimeType = isAfter20 ? 'containerd' : 'docker';
     this.updateFormValue('containerRuntimeType', containerRuntimeType);
-    this.updateInsecureRegistry(this.localRegistryValue, containerRuntimeType);
     this.setState({
       containerRuntimeType,
     });
@@ -535,16 +456,15 @@ export default class Cluster extends BaseForm {
           onChange: this.handleImgType,
         },
         {
-          name: 'localRegistry',
-          label: t('LocalRegistry'),
-          type: 'select-input',
-          placeholder: t('Please input localRegistry'),
-          options: this.getRegistryOptions(),
-          maxLength: 256,
+          name: 'imageRegistry',
+          label: t('Image Registry'),
+          type: 'select',
+          options: this.registryOptions,
+          validator: this.checkImageRegistry,
+          required: this.isOffLine,
           tip: t(
-            "The registry for image of k8s's own components, if not input, the built-in image will be used."
+            'Select a configured Registry resource for image pulls. If none is selected, online installation uses the official registries.'
           ),
-          onChange: this.onK8SRegistryChange,
         },
         {
           name: 'kubernetesVersion',
@@ -610,7 +530,6 @@ export default class Cluster extends BaseForm {
           type: 'select',
           required: true,
           options: runtimeOption,
-          onChange: this.onRunTimeTypeChange,
           tip: t(
             'K8S version before the v1.20.0, container runtime default docker, and then default containerd, after v1.24.0 not support docker.'
           ),
@@ -640,18 +559,6 @@ export default class Cluster extends BaseForm {
           hidden: !this.isDocker,
           tip: t('The root dir in daemon.json.'),
         },
-        {
-          name: 'dockerInsecureRegistry',
-          label: t('Docker Registry'),
-          type: 'array-input',
-          isInput: true,
-          width: '100%',
-          hidden: !this.isDocker,
-          placeholder: t('Please input registry'),
-          tip: t(
-            'The registry for image, such as the insecure registry in the daemon.json of docker.'
-          ),
-        },
         // containerd
         {
           name: 'containerdVersion',
@@ -668,18 +575,6 @@ export default class Cluster extends BaseForm {
           placeholder: t('Please input containerd data path'),
           hidden: this.isDocker,
           tip: t('Root dir in config.toml'),
-        },
-        {
-          name: 'containerdInsecureRegistry',
-          label: t('Containerd Registry'),
-          type: 'array-input',
-          isInput: true,
-          width: '100%',
-          hidden: this.isDocker,
-          placeholder: t('Please input registry'),
-          tip: t(
-            'The registry containerd image, registry.mirrors in the config.toml.'
-          ),
         },
       ],
       // 网络

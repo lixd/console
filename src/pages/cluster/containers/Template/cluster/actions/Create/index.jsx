@@ -19,7 +19,7 @@ import { StepAction } from 'containers/Action';
 import { rootStore } from 'stores';
 import { arrayInputValue } from 'utils';
 import { computeAutoDetection } from 'resources/cluster';
-import { flatten, get, set, omit, assign, filter } from 'lodash';
+import { get, set, omit, assign, filter } from 'lodash';
 
 import Cluster from './Cluster';
 import Plugin from './Plugin';
@@ -93,8 +93,6 @@ export default class Create extends StepAction {
     this.templatesStore = rootStore.templatesStore;
   }
 
-  getRegistry = (registry) => flatten(arrayInputValue(registry));
-
   /* base64 加密 mask: true 的属性 */
   encodeProperty(components, enabledComponents) {
     enabledComponents.forEach(({ config, name }) => {
@@ -165,7 +163,7 @@ export default class Create extends StepAction {
       /* step2: Cluster config */
       // image
       offline,
-      localRegistry,
+      imageRegistry,
       certSANs,
       etcdDataDir,
       kubeletDataDir,
@@ -176,10 +174,8 @@ export default class Create extends StepAction {
       externalCaKey,
       // container runtime
       containerRuntimeType,
-      dockerInsecureRegistry,
       dockerRootDir,
       dockerVersion,
-      containerdInsecureRegistry,
       containerdRootDir,
       containerdVersion,
       backupPoint,
@@ -231,7 +227,7 @@ export default class Create extends StepAction {
       certSANs: arrayInputValue(certSANs),
       externalCaCert: externalCA ? externalCaCert : '',
       externalCaKey: externalCA ? externalCaKey : '',
-      localRegistry,
+      imageRegistry,
       workerNodeVip,
       kubernetesVersion,
       containerRuntime: {
@@ -239,12 +235,10 @@ export default class Create extends StepAction {
         ...(containerRuntimeType === 'docker'
           ? {
               version: dockerVersion,
-              insecureRegistry: this.getRegistry(dockerInsecureRegistry), // dockerInsecureRegistry,
               rootDir: dockerRootDir,
             }
           : {
               version: containerdVersion,
-              insecureRegistry: this.getRegistry(containerdInsecureRegistry),
               rootDir: containerdRootDir,
             }),
       },
