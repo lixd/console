@@ -14,6 +14,7 @@
  *  limitations under the License.
  */
 import { observer } from 'mobx-react';
+import { toJS } from 'mobx';
 import BaseForm from 'components/Form';
 import { rootStore } from 'stores';
 import { fqdn, path } from 'utils/regex';
@@ -21,8 +22,6 @@ import {
   isIPv4,
   isIpv6,
   isDomain,
-  isDomainPath,
-  isIpPort,
   isDomainPort,
   isIp,
 } from 'utils/validate';
@@ -46,6 +45,7 @@ const {
   nodeStore,
   regionStore,
   clusterStore,
+  registryStore,
   backupPointStore,
 } = rootStore;
 
@@ -55,9 +55,13 @@ export default class Cluster extends BaseForm {
     this.store = clusterStore;
     this.nodeStore = nodeStore;
     this.regionStore = regionStore;
+    this.registryStore = registryStore;
     this.backupPointStore = backupPointStore;
 
-    await this.getBackupPoint();
+    await Promise.all([
+      this.getBackupPoint(),
+      this.registryStore.fetchList({ limit: -1 }),
+    ]);
     await this.initVersions();
   }
 
@@ -125,11 +129,11 @@ export default class Cluster extends BaseForm {
     const versions = isOffLine ? this.offlineVersions : this.onlineVersions;
     const [firstVersion] = versions;
     const currentVersions = this.getCurrentVersionsByK8s(firstVersion);
-    const imageRepository = isOffLine ? '' : 'registry.k8s.io';
+    const imageRegistry = '';
 
     await this.updateContext({
       offline: isOffLine,
-      imageRepository,
+      imageRegistry,
       kubernetesVersions: versions,
       kubernetesVersion: firstVersion?.value,
       ...currentVersions,
@@ -138,7 +142,7 @@ export default class Cluster extends BaseForm {
       kubernetesVersion: firstVersion?.value,
       ...currentVersions,
     });
-    this.updateFormValue('imageRepository', imageRepository);
+    this.updateFormValue('imageRegistry', imageRegistry);
   };
 
   updateFormVersions(versions) {
@@ -183,6 +187,13 @@ export default class Cluster extends BaseForm {
       label: item.name,
     }));
     return options;
+  }
+
+  get registryOptions() {
+    return toJS(this.registryStore.list.data || []).map(({ name, host, scheme }) => ({
+      value: name,
+      label: `${name} (${scheme}://${host})`,
+    }));
   }
 
   get onlineVersions() {
@@ -326,28 +337,10 @@ export default class Cluster extends BaseForm {
     return Promise.reject(t('The selected node and schema are inconsistent'));
   };
 
-  checkk8sRegistry = (rule, value) => {
-    if (!value) return Promise.resolve(true);
-
-    const checkFunc = (item) => {
-      if (!item) return true;
-      if (
-        isDomain(item) ||
-        isDomainPath(item) ||
-        isIPv4(item) ||
-        isIpPort(item)
-      ) {
-        return true;
-      }
-      return false;
-    };
-
-    if (!checkFunc(value)) {
-      return Promise.reject(t('Please enter a legal registry'));
-    }
-
-    return Promise.resolve(true);
-  };
+  checkImageRegistry = (rule, value) =>
+    !value && this.isOffLine
+      ? Promise.reject(t('Please select a Registry resource'))
+      : Promise.resolve(true);
 
   checkLabels = (rule, value = []) => {
     const checkFunc = (item) => {
@@ -444,19 +437,18 @@ export default class Cluster extends BaseForm {
           onChange: this.handleImgType,
         },
         {
-          name: 'imageRepository',
-          label: t('Image Repository'),
-          type: 'input',
-          placeholder: t('Please input image repository'),
-          maxLength: 256,
-          validator: this.checkk8sRegistry,
+          name: 'imageRegistry',
+          label: t('Image Registry'),
+          type: 'select',
+          options: this.registryOptions,
+          validator: this.checkImageRegistry,
           required: this.isOffLine,
           extra: this.isOffLine
             ? t(
-                'The images are pulled from the local server by default. You can also fill in another private registry. The components will inherit the registry by default. Please ensure that the required images are stored in the registry. You can also set an independent registry for a specific component, and the component image will be pulled from this address.'
+                'Select a configured Registry resource. Its address and access settings will be used to pull offline installation images, and components inherit this Registry by default.'
               )
             : t(
-                'The images are pulled from the official registry by default, for example, k8s images are pulled from k8s.gcr.io and calico images are pulled from docker.io. You can also fill in another private registry. The components will inherit the registry by default. Please ensure that the required images are stored in the registry. You can also set an independent registry for a specific component, and the component image will be pulled from this address.'
+                'Optionally select a configured Registry resource for image pulls. If none is selected, images are pulled from the official registries.'
               ),
         },
         {

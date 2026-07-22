@@ -174,7 +174,7 @@ export default class Create extends StepAction {
       /* step2: Cluster config */
       // image
       offline,
-      imageRepository,
+      imageRegistry,
       kubernetesVersion,
       certSANs,
       etcdDataDir,
@@ -246,7 +246,6 @@ export default class Create extends StepAction {
       : {};
 
     const offlineAnnotations = offline ? { 'kubeclipper.io/offline': '' } : {};
-
     const params = {
       kind: 'Cluster',
       apiVersion: 'core.kubeclipper.io/v1',
@@ -274,7 +273,7 @@ export default class Create extends StepAction {
       externalCaKey: externalCA ? safeBtoa(externalCaKey) : '',
       masters: formatNodesWithLabel(values).master,
       workers: formatNodesWithLabel(values).worker || [],
-      imageRepository,
+      imageRegistry,
       kubernetesVersion,
       containerRuntime: {
         type: containerRuntimeType,

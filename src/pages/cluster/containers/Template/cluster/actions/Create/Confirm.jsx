@@ -211,7 +211,7 @@ export class ConfirmStep extends BaseForm {
         label: t('Image Type'),
         value: offline ? t('Offline') : t('Online'),
       },
-      ...this.notFilled(t('Image Repository'), 'imageRepository'),
+      ...this.notFilled(t('Image Registry'), 'imageRegistry'),
       {
         label: t('K8S Version'),
         value: kubernetesVersion,

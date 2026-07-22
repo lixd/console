@@ -163,7 +163,7 @@ export default class Create extends StepAction {
       /* step2: Cluster config */
       // image
       offline,
-      imageRepository,
+      imageRegistry,
       certSANs,
       etcdDataDir,
       kubeletDataDir,
@@ -227,7 +227,7 @@ export default class Create extends StepAction {
       certSANs: arrayInputValue(certSANs),
       externalCaCert: externalCA ? externalCaCert : '',
       externalCaKey: externalCA ? externalCaKey : '',
-      imageRepository,
+      imageRegistry,
       workerNodeVip,
       kubernetesVersion,
       containerRuntime: {

@@ -89,11 +89,11 @@ function BaseDetail() {
         dataIndex: 'kubernetesVersion',
       },
       {
-        label: t('Image Repository'),
+      label: t('Image Registry'),
         dataIndex: 'offline',
         render: (_, data) => {
-          const { offline, imageRepository = 'registry.k8s.io' } = data;
-          return `${offline ? t('Offline') : t('Online')} ${imageRepository}`;
+          const { offline, imageRegistry = 'registry.k8s.io' } = data;
+          return `${offline ? t('Offline') : t('Online')} ${imageRegistry}`;
         },
       },
       {

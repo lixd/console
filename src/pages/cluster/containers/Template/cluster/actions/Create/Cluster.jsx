@@ -14,6 +14,7 @@
  *  limitations under the License.
  */
 import { observer } from 'mobx-react';
+import { toJS } from 'mobx';
 import BaseForm from 'components/Form';
 import { rootStore } from 'stores';
 import { fqdn } from 'utils/regex';
@@ -21,8 +22,6 @@ import {
   isIPv4,
   isIpv6,
   isDomain,
-  isDomainPath,
-  isIpPort,
 } from 'utils/validate';
 import {
   clusterParams,
@@ -44,21 +43,26 @@ const {
   nodeStore,
   regionStore,
   clusterStore,
+  registryStore,
   backupPointStore,
   templatesStore,
 } = rootStore;
 
 @observer
 export default class Cluster extends BaseForm {
-  init() {
+  async init() {
     this.store = clusterStore;
     this.nodeStore = nodeStore;
     this.regionStore = regionStore;
+    this.registryStore = registryStore;
     this.backupPointStore = backupPointStore;
     this.templatesStore = templatesStore;
 
-    this.getBackupPoint();
-    this.getVersion();
+    await Promise.all([
+      this.getBackupPoint(),
+      this.registryStore.fetchList({ limit: -1 }),
+      this.getVersion(),
+    ]);
   }
 
   async getVersion() {
@@ -115,11 +119,11 @@ export default class Cluster extends BaseForm {
     const versions = isOffLine ? this.offlineVersions : this.onlineVersions;
     const [firstVersion] = versions;
     const currentVersions = this.getCurrentVersionsByK8s(firstVersion);
-    const imageRepository = isOffLine ? '' : 'registry.k8s.io';
+    const imageRegistry = '';
 
     await this.updateContext({
       offline: isOffLine,
-      imageRepository,
+      imageRegistry,
       kubernetesVersions: versions,
       kubernetesVersion: firstVersion?.value,
       ...currentVersions,
@@ -129,7 +133,7 @@ export default class Cluster extends BaseForm {
       kubernetesVersion: firstVersion?.value,
       ...currentVersions,
     });
-    this.updateFormValue('imageRepository', imageRepository);
+    this.updateFormValue('imageRegistry', imageRegistry);
   };
 
   updateFormVersions(versions) {
@@ -201,6 +205,13 @@ export default class Cluster extends BaseForm {
       label: item.name,
     }));
     return options;
+  }
+
+  get registryOptions() {
+    return toJS(this.registryStore.list.data || []).map(({ name, host, scheme }) => ({
+      value: name,
+      label: `${name} (${scheme}://${host})`,
+    }));
   }
 
   getCurrentVersionsByK8s = (kubernetesVersion) => {
@@ -334,28 +345,10 @@ export default class Cluster extends BaseForm {
     return Promise.resolve(true);
   };
 
-  checkk8sRegistry = (rule, value) => {
-    if (!value) return Promise.resolve(true);
-
-    const checkFunc = (item) => {
-      if (!item) return true;
-      if (
-        isDomain(item) ||
-        isDomainPath(item) ||
-        isIPv4(item) ||
-        isIpPort(item)
-      ) {
-        return true;
-      }
-      return false;
-    };
-
-    if (!checkFunc(value)) {
-      return Promise.reject(t('Please enter a legal registry'));
-    }
-
-    return Promise.resolve(true);
-  };
+  checkImageRegistry = (rule, value) =>
+    !value && this.isOffLine
+      ? Promise.reject(t('Please select a Registry resource'))
+      : Promise.resolve(true);
 
   checkLabels = (rule, value = []) => {
     const checkFunc = (item) => {
@@ -463,15 +456,14 @@ export default class Cluster extends BaseForm {
           onChange: this.handleImgType,
         },
         {
-          name: 'imageRepository',
-          label: t('Image Repository'),
-          type: 'input',
-          placeholder: t('Please input image repository'),
-          maxLength: 256,
-          validator: this.checkk8sRegistry,
+          name: 'imageRegistry',
+          label: t('Image Registry'),
+          type: 'select',
+          options: this.registryOptions,
+          validator: this.checkImageRegistry,
           required: this.isOffLine,
           tip: t(
-            "The registry for image of k8s's own components, if not input, the built-in image will be used."
+            'Select a configured Registry resource for image pulls. If none is selected, online installation uses the official registries.'
           ),
         },
         {

@@ -191,9 +191,9 @@ const ClusterTemplateMapper = (item) => {
     externalIP,
     backupPoint,
     certSANs: get(config, 'certSANs'),
-    imageRepository: get(
+    imageRegistry: get(
       config,
-      'imageRepository',
+      'imageRegistry',
       get(config, 'offline') ? '' : 'registry.k8s.io'
     ),
     workerNodeVip: get(config, 'workerNodeVip'),
