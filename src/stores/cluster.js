@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-import { get, uniqBy } from 'lodash';
+import { get } from 'lodash';
 import { APIVERSION } from 'utils/constants';
 import ObjectMapper from 'utils/object.mapper';
 import { versionCompare } from 'utils';
@@ -84,6 +84,29 @@ export default class ClusterStore extends BaseStore {
     await this.fetchOfflineVersion(params);
   }
 
+  normalizeVersions(rules = []) {
+    const versions = rules.reduce((result, rule) => {
+      const current = result.get(rule.version);
+
+      if (current) {
+        current.archs = Array.from(
+          new Set([...current.archs, rule.arch].filter(Boolean))
+        );
+      } else {
+        result.set(rule.version, {
+          ...rule,
+          archs: rule.arch ? [rule.arch] : [],
+        });
+      }
+
+      return result;
+    }, new Map());
+
+    return Array.from(versions.values())
+      .sort((a, b) => versionCompare(a.version, b.version))
+      .reverse();
+  }
+
   async fetchOnlineVersion(params) {
     try {
       const onlineResult = await request.get(
@@ -93,24 +116,9 @@ export default class ClusterStore extends BaseStore {
           online: true,
         }
       );
-      let onlineData = get(onlineResult, 'rules') || [];
+      const onlineData = get(onlineResult, 'rules') || [];
 
-      onlineData = onlineData
-        .sort((a, b) => versionCompare(a.version, b.version))
-        .reverse();
-
-      onlineData = onlineData.map((item) => {
-        const archs = onlineData
-          .filter((data) => data.version === item.version)
-          .map(({ arch }) => arch);
-
-        return {
-          ...item,
-          archs,
-        };
-      });
-      onlineData = uniqBy(onlineData, 'version');
-      this.onlineVersion = onlineData || [];
+      this.onlineVersion = this.normalizeVersions(onlineData);
     } catch (e) {}
   }
 
@@ -123,24 +131,9 @@ export default class ClusterStore extends BaseStore {
           online: false,
         }
       );
-      let offlineData = get(offlineResult, 'rules') || [];
+      const offlineData = get(offlineResult, 'rules') || [];
 
-      offlineData = offlineData
-        .sort((a, b) => versionCompare(a.version, b.version))
-        .reverse();
-
-      offlineData = offlineData.map((item) => {
-        const archs = offlineData
-          .filter((data) => data.version === item.version)
-          .map(({ arch }) => arch);
-
-        return {
-          ...item,
-          archs,
-        };
-      });
-      offlineData = uniqBy(offlineData, 'version');
-      this.offlineVersion = offlineData || [];
+      this.offlineVersion = this.normalizeVersions(offlineData);
     } catch (e) {}
   }
 
