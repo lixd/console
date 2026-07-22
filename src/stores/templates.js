@@ -25,13 +25,6 @@ export default class TemplatesStore extends BaseStore {
 
   module = 'templates';
 
-  async update(datas) {
-    const data = {
-      insecureRegistry: datas,
-    };
-    await request.put(`${this.getListUrl()}`, data);
-  }
-
   create(params, config) {
     const {
       templateName,

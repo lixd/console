@@ -15,7 +15,6 @@
  */
 import React from 'react';
 import { observer } from 'mobx-react';
-import { toJS } from 'mobx';
 import { ModalAction } from 'containers/Action';
 import { rootStore } from 'stores';
 import styles from './index.less';
@@ -25,7 +24,7 @@ import {
   checkExpired,
   isDisableByProviderType,
 } from 'utils';
-import { isIPv4, isDomain, isIpPort } from 'utils/validate';
+import { isIPv4, isDomain, isDomainPath, isIpPort } from 'utils/validate';
 
 @observer
 export default class Upgrade extends ModalAction {
@@ -39,29 +38,27 @@ export default class Upgrade extends ModalAction {
 
   async init() {
     this.store = rootStore.clusterStore;
-    this.registryStore = rootStore.registryStore;
     await this.getVersion();
-    await this.getCommonRegistry();
     await this.initDefaultValue();
   }
 
   initDefaultValue = async () => {
-    const { offline, localRegistry } = this.item;
+    const { offline, imageRepository } = this.item;
     this.setState({
       offline,
       targetVersions: this.getMetaVersion(offline),
-      localRegistry,
+      imageRepository,
     });
     this.updateDefaultValue();
   };
 
   get defaultValue() {
-    const { offline, localRegistry = '' } = this.state;
+    const { offline, imageRepository = 'registry.k8s.io' } = this.state;
     const versions = this.getMetaVersion(offline);
     return {
       offline,
       version: versions[0]?.value,
-      localRegistry,
+      imageRepository,
     };
   }
 
@@ -85,9 +82,11 @@ export default class Upgrade extends ModalAction {
 
   handleImgType = async (offline) => {
     const versions = this.getMetaVersion(offline);
+    const imageRepository = offline ? '' : 'registry.k8s.io';
 
     await this.setState({
       offline,
+      imageRepository,
       targetVersions: versions,
       version: versions?.[0]?.value,
     });
@@ -96,10 +95,6 @@ export default class Upgrade extends ModalAction {
 
   async getVersion() {
     await this.store.fetchVersion({ limit: -1 });
-  }
-
-  async getCommonRegistry() {
-    await this.registryStore.fetchList();
   }
 
   static policy = 'clusters:edit';
@@ -139,7 +134,12 @@ export default class Upgrade extends ModalAction {
 
     const checkFunc = (item) => {
       if (!item) return true;
-      if (isDomain(item) || isIPv4(item) || isIpPort(item)) {
+      if (
+        isDomain(item) ||
+        isDomainPath(item) ||
+        isIPv4(item) ||
+        isIpPort(item)
+      ) {
         return true;
       }
       return false;
@@ -155,14 +155,6 @@ export default class Upgrade extends ModalAction {
   get isOffLine() {
     const { offline } = this.state;
     return offline === true;
-  }
-
-  getRegistryOptions() {
-    const data = toJS(this.registryStore.list.data);
-    return (data || []).map(({ host }) => ({
-      value: host,
-      label: host,
-    }));
   }
 
   get formItems() {
@@ -212,14 +204,14 @@ export default class Upgrade extends ModalAction {
         ],
       },
       {
-        name: 'localRegistry',
-        label: t('LocalRegistry'),
-        type: 'select-input',
-        placeholder: t('Please input localRegistry'),
-        options: this.getRegistryOptions(),
+        name: 'imageRepository',
+        label: t('Image Repository'),
+        type: 'input',
+        placeholder: t('Please input image repository'),
         hidden: !this.isOffLine,
+        required: this.isOffLine,
         maxLength: 256,
-        tip: t('TIP_CLUSTER_LOCALREGISTRY'),
+        tip: t('TIP_CLUSTER_IMAGE_REPOSITORY'),
         validator: this.checkk8sRegistry,
       },
     ];

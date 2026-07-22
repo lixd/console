@@ -15,7 +15,7 @@
  */
 
 import { StepAction } from 'containers/Action';
-import { flatten, get, omit, assign, filter } from 'lodash';
+import { get, omit, assign, filter } from 'lodash';
 import { observer } from 'mobx-react';
 import { computeAutoDetection } from 'resources/cluster';
 import { formatNodesWithLabel } from 'resources/node';
@@ -124,8 +124,6 @@ export default class Create extends StepAction {
     return t('Cluster {name} is installing.', { name: this.instanceName });
   }
 
-  getRegistry = (registry) => flatten(arrayInputValue(registry));
-
   getComponents = (values) => {
     const { plugins = {}, defaultStorage = '' } = values;
     const enabledComponents = [];
@@ -176,7 +174,7 @@ export default class Create extends StepAction {
       /* step2: Cluster config */
       // image
       offline,
-      localRegistry,
+      imageRepository,
       kubernetesVersion,
       certSANs,
       etcdDataDir,
@@ -187,10 +185,8 @@ export default class Create extends StepAction {
       externalCaKey,
       // container runtime
       containerRuntimeType,
-      dockerInsecureRegistry,
       dockerRootDir,
       dockerVersion,
-      containerdInsecureRegistry,
       containerdRootDir,
       containerdVersion,
       backupPoint,
@@ -278,19 +274,17 @@ export default class Create extends StepAction {
       externalCaKey: externalCA ? safeBtoa(externalCaKey) : '',
       masters: formatNodesWithLabel(values).master,
       workers: formatNodesWithLabel(values).worker || [],
-      localRegistry,
+      imageRepository,
       kubernetesVersion,
       containerRuntime: {
         type: containerRuntimeType,
         ...(containerRuntimeType === 'docker'
           ? {
               version: dockerVersion,
-              insecureRegistry: this.getRegistry(dockerInsecureRegistry), // dockerInsecureRegistry,
               rootDir: dockerRootDir,
             }
           : {
               version: containerdVersion,
-              insecureRegistry: this.getRegistry(containerdInsecureRegistry),
               rootDir: containerdRootDir,
             }),
       },

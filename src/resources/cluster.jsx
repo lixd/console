@@ -23,7 +23,7 @@ import moment from 'moment';
 
 export const clusterParams = {
   offline: true,
-  localRegistry: '',
+  imageRepository: '',
   etcdDataDir: '/var/lib/etcd',
   kubeletDataDir: '/var/lib/kubelet',
   containerRuntimeType: 'containerd',
