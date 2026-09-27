@@ -15,6 +15,7 @@
  */
 
 import ObjectMapper from './object.mapper';
+import { uiSchemas } from '../pages/cluster/components/plugin/uiSchemas';
 
 jest.mock('resources/node', () => ({ status: {} }), { virtual: true });
 jest.mock(
@@ -102,5 +103,27 @@ describe('operation mapper', () => {
     ]);
 
     expect(result.operationSteps[0].nodes[0].ipv4).toBe('10.0.0.2');
+  });
+});
+
+describe('cluster storage mapper', () => {
+  it('does not expose the retired nfs-provisioner addon', () => {
+    const result = ObjectMapper.clusters({
+      metadata: { name: 'cluster-1', annotations: {} },
+      networking: {
+        pods: { cidrBlocks: [] },
+        services: { cidrBlocks: [] },
+      },
+      addons: [
+        { name: 'nfs-provisioner', config: {} },
+        { name: 'nfs-csi', config: {} },
+      ],
+      masters: [],
+      workers: [],
+      nodes: [],
+    });
+
+    expect(uiSchemas.map(({ name }) => name)).not.toContain('nfs-provisioner');
+    expect(result.storage.map(({ name }) => name)).toEqual(['nfs-csi']);
   });
 });
