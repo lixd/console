@@ -35,27 +35,18 @@ export default class Index extends ConfirmAction {
   }
 
   get notAllowAction() {
-    return ['BackupCluster', 'UpgradeCluster', 'RecoveryCluster'];
+    return ['BackupCluster', 'RecoveryCluster'];
   }
 
   isFailedStatus = (item) => {
-    const firstPage = operationStore.list.page;
-    const firstData = operationStore.list.data[0];
-    const { id, phase } = item;
-    if (!firstData) return false;
-
-    if (
-      firstPage === 1 &&
-      firstData.id === id &&
-      ['Failed', 'TimedOut'].includes(phase) &&
-      !this.notAllowAction.includes(firstData.operationName)
-    ) {
-      return true;
-    } else if (firstData.id === id && phase === 'Canceled') {
-      return true;
-    }
-
-    return false;
+    const { uid, phase, operationName } = item;
+    return (
+      operationStore.list.page === 1 &&
+      !!uid &&
+      operationStore.latestOperationUID === uid &&
+      ['Failed', 'TimedOut', 'Canceled'].includes(phase) &&
+      (phase === 'Canceled' || !this.notAllowAction.includes(operationName))
+    );
   };
 
   allowedCheckFunc = (item) => this.isFailedStatus(item);

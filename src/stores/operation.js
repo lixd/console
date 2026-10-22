@@ -34,6 +34,8 @@ class OperationStore extends BaseStore {
 
   operationContinueTokens = {};
 
+  latestOperationUID = '';
+
   module = 'operations';
 
   get apiType() {
@@ -53,6 +55,7 @@ class OperationStore extends BaseStore {
       operationSteps: observable,
       currentNodesByStep: observable,
       activeStepIndex: observable,
+      latestOperationUID: observable,
     });
   }
 
@@ -101,6 +104,7 @@ class OperationStore extends BaseStore {
    * translating it to the server-side limit/continue cursor API.
    */
   async fetchList({ more, ...params } = {}) {
+    this.latestOperationUID = '';
     !this.list.silent && this.list.reset();
 
     const page = Number(params.page) || 1;
@@ -129,6 +133,7 @@ class OperationStore extends BaseStore {
 
     let result = {};
     let data = [];
+    let latestOperationUID = '';
     if (paged) {
       let currentPage = 1;
       let continueToken = '';
@@ -149,6 +154,9 @@ class OperationStore extends BaseStore {
         // eslint-disable-next-line no-await-in-loop
         result = (await request.get(this.getListUrl(), pageQuery)) || {};
         data = this.getListData(result);
+        if (currentPage === 1) {
+          latestOperationUID = get(data, '[0].uid', '');
+        }
         this.operationContinueTokens[currentPage] = get(
           result,
           'metadata.continue',
@@ -163,7 +171,11 @@ class OperationStore extends BaseStore {
       }
     } else {
       result = (await request.get(this.getListUrl(), requestQuery)) || {};
-      data = this.getListData(result).filter(
+      data = this.getListData(result);
+      // Retry eligibility uses the latest target operation before search
+      // filtering, rather than the first matching historical operation.
+      latestOperationUID = get(data, '[0].uid', '');
+      data = data.filter(
         (item) =>
           !operationName ||
           String(item.operationName || '').includes(String(operationName))
@@ -171,6 +183,7 @@ class OperationStore extends BaseStore {
     }
 
     const newData = await this.listDidFetch(data, query);
+    this.latestOperationUID = latestOperationUID;
     const remaining = get(result, 'metadata.remainingItemCount');
     const pageOffset = (page - 1) * limit;
     const total = paged
