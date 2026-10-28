@@ -54,6 +54,8 @@ export default class PipelineLog extends ViewAction {
     this.refreshing = false;
     this.disposer = null;
     this.manuallySelectedStepID = null;
+    this.disposed = false;
+    this.readVersion = 0;
   }
 
   componentDidMount() {
@@ -64,6 +66,8 @@ export default class PipelineLog extends ViewAction {
   }
 
   componentWillUnmount() {
+    this.disposed = true;
+    this.readVersion += 1;
     this.store.list.silent = false;
     this.websocket.close();
     this.disposer?.();
@@ -94,12 +98,14 @@ export default class PipelineLog extends ViewAction {
   };
 
   loadOperation = async () => {
+    const version = this.readVersion;
     try {
       const operation = await request.get(
         `${APIVERSION.operations}/operations/${encodeURIComponent(
           this.item.name
         )}`
       );
+      if (this.disposed || version !== this.readVersion) return;
       await this.updateOperation(operation);
     } catch (error) {
       // The operation list already rendered the row. Keep the dialog usable
@@ -110,12 +116,15 @@ export default class PipelineLog extends ViewAction {
   };
 
   refreshTasks = async () => {
-    if (!this.rawOperation || this.refreshing) return;
+    if (!this.rawOperation || this.refreshing || this.disposed) return;
 
     this.refreshing = true;
+    const operation = this.rawOperation;
+    const version = this.readVersion;
     try {
-      const tasks = await this.fetchTasks(this.rawOperation);
-      await this.updateOperation(this.rawOperation, tasks);
+      const tasks = await this.fetchTasks(operation);
+      if (this.disposed || version !== this.readVersion) return;
+      await this.updateOperation(operation, tasks);
     } catch (error) {
       // Task creation/status updates are eventually consistent with the
       // operation watch. The next refresh will retry without closing the log.
@@ -138,7 +147,9 @@ export default class PipelineLog extends ViewAction {
   };
 
   updateOperation = async (operation, tasks) => {
-    if (!operation) return;
+    if (!operation || this.disposed) return;
+
+    const version = ++this.readVersion;
 
     if (
       this.rawOperation?.metadata?.uid &&
@@ -148,6 +159,7 @@ export default class PipelineLog extends ViewAction {
     }
     this.rawOperation = operation;
     const operationTasks = tasks || (await this.fetchTasks(operation));
+    if (this.disposed || version !== this.readVersion) return;
     const result = ObjectMapper.operations(operation, operationTasks);
     const { operationSteps } = result;
 

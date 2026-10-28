@@ -29,6 +29,10 @@ export default class LogStore extends BaseStore {
 
   isStepFinished = false;
 
+  fetchPromise = null;
+
+  generation = 0;
+
   constructor(props) {
     super(props);
 
@@ -40,48 +44,68 @@ export default class LogStore extends BaseStore {
   }
 
   async fetchStepLog(params) {
+    const { generation } = this;
+    while (this.fetchPromise) {
+      // Each read depends on the byte offset delivered by the previous read.
+      // eslint-disable-next-line no-await-in-loop
+      await this.fetchPromise;
+      if (generation !== this.generation) return;
+    }
     if (!params.taskName) {
       this.isLoading = false;
       return;
     }
 
-    this.logError = '';
+    this.isLoading = true;
+    const pending = this.fetchStepLogContent(params, generation).catch(
+      (error) => {
+        if (generation === this.generation) {
+          this.logError =
+            error?.reason || error?.message || t('Failed to load task logs');
+        }
+      }
+    );
+    this.fetchPromise = pending;
     try {
+      await pending;
+    } finally {
+      if (this.fetchPromise === pending) this.fetchPromise = null;
+      if (generation === this.generation) this.isLoading = false;
+    }
+  }
+
+  async fetchStepLogContent(params, generation) {
+    let more;
+    do {
+      // eslint-disable-next-line no-await-in-loop
       const res = await request.get(
         `${APIVERSION.operations}/operationtasks/${encodeURIComponent(
           params.taskName
         )}/logs`,
-        { offset: params.offset || 0 }
+        { offset: this.cumulativeSize }
       );
+      if (generation !== this.generation) return;
       const deliverySize = res.deliverySize || 0;
       this.cumulativeSize += deliverySize;
       this.logdata += res.content || '';
-
-      if (
+      this.logError = '';
+      more =
         this.isStepFinished &&
         deliverySize > 0 &&
-        this.cumulativeSize < res.logSize
-      ) {
-        params = { ...params, offset: this.cumulativeSize };
-        await this.fetchStepLog(params);
-      }
-    } catch (error) {
-      this.logError =
-        error?.reason || error?.message || t('Failed to load task logs');
-    } finally {
-      this.isExpand = true;
-      this.isLoading = false;
-    }
+        this.cumulativeSize < res.logSize;
+    } while (more);
   }
 
   async getStepLog(params) {
-    this.isLoading = true;
     await this.fetchStepLog(params);
   }
 
   logReset() {
+    this.generation += 1;
+    this.fetchPromise = null;
     this.cumulativeSize = 0;
     this.logdata = '';
     this.logError = '';
+    this.isLoading = false;
   }
 }

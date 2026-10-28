@@ -66,6 +66,7 @@ describe('operation mapper', () => {
       {
         metadata: { name: 'task-1', creationTimestamp: '2026-09-07T00:00:01Z' },
         spec: {
+          operationRef: { uid: 'operation-uid' },
           stepID: 'step-1',
           nodeRef: { name: 'node-1', uid: 'node-uid' },
         },
@@ -94,6 +95,7 @@ describe('operation mapper', () => {
       {
         metadata: { name: 'task-1' },
         spec: {
+          operationRef: { uid: 'operation-uid' },
           stepID: 'step-1',
           nodeRef: { name: 'node-1', uid: 'node-uid', ip: '10.0.0.2' },
         },
@@ -102,5 +104,73 @@ describe('operation mapper', () => {
     ]);
 
     expect(result.operationSteps[0].nodes[0].ipv4).toBe('10.0.0.2');
+  });
+
+  const task = (name, generation = 0, attempt = 0, phase = 'Failed') => ({
+    metadata: { name, uid: `${name}-uid` },
+    spec: {
+      operationRef: { uid: 'operation-uid' },
+      stepID: 'step-1',
+      nodeRef: { name: 'node-1', uid: 'node-uid' },
+      retryGeneration: generation,
+      attempt,
+    },
+    status: { phase, result: { reason: name, message: `${name} message` } },
+  });
+
+  it('selects the latest retry generation, attempt, then creation time', () => {
+    const old = task('old', 0, 20);
+    const retry = task('retry', 1, 1);
+    const olderAttempt = task('older-attempt', 1, 0);
+    const olderTimestamp = {
+      ...retry,
+      metadata: {
+        name: 'older-timestamp',
+        creationTimestamp: '2026-09-07T00:00:00Z',
+      },
+    };
+    retry.metadata.creationTimestamp = '2026-09-07T00:00:01Z';
+    const result = ObjectMapper.operations(operation, [
+      retry,
+      old,
+      olderAttempt,
+      olderTimestamp,
+    ]);
+    expect(result.operationSteps[0].status[0]).toMatchObject({
+      taskName: 'retry',
+      taskUID: 'retry-uid',
+      reason: 'retry',
+      message: 'retry message',
+    });
+  });
+
+  it('rejects a same-name old node, another Operation and another step', () => {
+    const correct = task('correct');
+    const oldNode = task('old-node', 5);
+    oldNode.spec.nodeRef.uid = 'retired-node-uid';
+    const otherOperation = task('other-operation', 5);
+    otherOperation.spec.operationRef.uid = 'other-operation-uid';
+    const otherStep = task('other-step', 5);
+    otherStep.spec.stepID = 'another-step';
+    const result = ObjectMapper.operations(operation, [
+      oldNode,
+      otherOperation,
+      otherStep,
+      correct,
+    ]);
+    expect(result.operationSteps[0].status[0].message).toBe('correct message');
+  });
+
+  it('keeps historical success reused by a later operation retry', () => {
+    const retryOperation = {
+      ...operation,
+      spec: { ...operation.spec, retryGeneration: 2 },
+    };
+    const result = ObjectMapper.operations(retryOperation, [
+      task('done', 0, 0, 'Succeeded'),
+    ]);
+    expect(result.operationSteps[0].nodes[0].status).toBe('Succeeded');
+    expect(result.operationSteps[0].isComplete).toBe(true);
+    expect(result.operationSteps[0].stepStatus).toBe('success');
   });
 });

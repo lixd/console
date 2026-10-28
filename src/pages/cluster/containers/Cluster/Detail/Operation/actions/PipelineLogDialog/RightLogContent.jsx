@@ -31,27 +31,14 @@ import { formatSeconds } from 'utils';
 import { useInterval } from 'hooks';
 
 function LogItemContent(props) {
-  const { isExpand, isLoading, logdata, logError, onRetry } = props;
+  const { isExpand, isLoading, logdata } = props;
   if (isExpand) {
-    if (isLoading) {
+    if (isLoading && !logdata) {
       return <Spin className={styles['spin-center']} />;
     } else {
       return (
         <div className={styles['log-item-content']}>
           {logdata && <pre>{logdata}</pre>}
-          {logError && (
-            <Alert
-              type="error"
-              showIcon
-              message={t('Failed to load task logs')}
-              description={logError}
-              action={
-                <Button size="small" onClick={onRetry}>
-                  {t('Retry loading logs')}
-                </Button>
-              }
-            />
-          )}
         </div>
       );
     }
@@ -60,8 +47,18 @@ function LogItemContent(props) {
 }
 
 const LogItem = observer((props) => {
-  const { nodeStatus, taskName, logStore, runtime, nodes, index } = props;
+  const {
+    nodeStatus,
+    taskName,
+    logStore,
+    runtime,
+    nodes,
+    index,
+    reason,
+    message,
+  } = props;
   const inputEl = useRef();
+  const initiallyExpanded = useRef(index === 0);
 
   const taskFinished = ['Succeeded', 'Failed', 'TimedOut', 'Canceled'].includes(
     nodeStatus
@@ -91,15 +88,23 @@ const LogItem = observer((props) => {
   };
 
   useEffect(() => {
-    if (index === 0 && taskName) {
+    if (initiallyExpanded.current) logStore.isExpand = true;
+    return () => logStore.logReset();
+  }, [logStore]);
+
+  useEffect(() => {
+    if (logStore.isExpand && taskName) {
       const fn = async () => {
-        await logStore.fetchStepLog(params);
+        await logStore.fetchStepLog({
+          taskName,
+          offset: logStore.cumulativeSize,
+        });
         inputEl.current?.scrollIntoView({ block: 'end' });
       };
 
       fn();
     }
-  }, [taskName]);
+  }, [taskName, nodeStatus, logStore]);
 
   useInterval(
     () => {
@@ -124,6 +129,13 @@ const LogItem = observer((props) => {
     }
   };
 
+  const failed = ['Failed', 'TimedOut', 'Canceled'].includes(nodeStatus);
+  const taskError = [reason, message]
+    .filter(
+      (value, position, values) => value && values.indexOf(value) === position
+    )
+    .join('\n');
+
   return (
     <div className={styles.LogItem} ref={inputEl}>
       <div className={classNames(styles.LogItem__title)} onClick={toggleExpand}>
@@ -134,11 +146,34 @@ const LogItem = observer((props) => {
           {stateIcons(false, nodeStatus)}
         </span>
       </div>
+      {failed && taskError && (
+        <Alert
+          className={styles['task-error']}
+          type="error"
+          showIcon
+          message={t('Task execution failed')}
+          description={
+            <pre className={styles['task-error-message']}>{taskError}</pre>
+          }
+        />
+      )}
+      {logError && (
+        <Alert
+          className={styles['task-error']}
+          type="error"
+          showIcon
+          message={t('Failed to load task logs')}
+          description={logError}
+          action={
+            <Button size="small" onClick={() => logStore.getStepLog(params)}>
+              {t('Retry loading logs')}
+            </Button>
+          }
+        />
+      )}
       <LogItemContent
         isExpand={isExpand}
         logdata={logdata}
-        logError={logError}
-        onRetry={() => logStore.getStepLog(params)}
         isLoading={isLoading}
       />
     </div>
@@ -159,16 +194,21 @@ function RightLogContent() {
           const taskStatus = statuses[index] || {};
           const taskName = taskStatus.taskName || item.taskName;
           const storeKey =
+            taskStatus.taskUID ||
             taskName ||
-            `${item.uid || item.name || item.id || 'node'}-${index}`;
+            `${currentNodesByStep.stepID}-${
+              item.uid || item.name || item.id || 'node'
+            }-${index}`;
           if (!logStores.current.has(storeKey)) {
             logStores.current.set(storeKey, new LogStore());
           }
           return (
             <LogItem
-              key={index}
+              key={storeKey}
               logStore={logStores.current.get(storeKey)}
               nodeStatus={taskStatus.status || 'Pending'}
+              reason={taskStatus.reason}
+              message={taskStatus.message}
               taskName={taskName}
               runtime={
                 taskStatus.startAt

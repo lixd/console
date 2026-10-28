@@ -233,13 +233,14 @@ const operationTerminalPhases = ['Succeeded', 'Failed', 'TimedOut', 'Canceled'];
 
 const taskStatusByPhase = (phase) => phase || 'Pending';
 
-const latestTaskForTarget = (tasks, step, target) => {
+const latestTaskForTarget = (tasks, step, target, operationUID) => {
   const candidates = tasks.filter((task) => {
     const taskStepID = get(task, 'spec.stepID');
     const taskNode = get(task, 'spec.nodeRef', {});
     return (
+      get(task, 'spec.operationRef.uid') === operationUID &&
       taskStepID === step.id &&
-      (taskNode.uid === target.uid || taskNode.name === target.name)
+      (target.uid ? taskNode.uid === target.uid : taskNode.name === target.name)
     );
   });
 
@@ -263,9 +264,9 @@ const latestTaskForTarget = (tasks, step, target) => {
 const stepName = (step) =>
   get(step, 'payload.step.name') || get(step, 'payload.name') || step.id;
 
-const mapOperationStep = (step, tasks) => {
+const mapOperationStep = (step, tasks, operationUID) => {
   const nodes = (step.targets || []).map((target) => {
-    const task = latestTaskForTarget(tasks, step, target);
+    const task = latestTaskForTarget(tasks, step, target, operationUID);
     const phase = taskStatusByPhase(get(task, 'status.phase'));
 
     return {
@@ -274,6 +275,7 @@ const mapOperationStep = (step, tasks) => {
       uid: target.uid,
       ipv4: target.ip || get(task, 'spec.nodeRef.ip', ''),
       taskName: get(task, 'metadata.name'),
+      taskUID: get(task, 'metadata.uid'),
       status: phase,
       startAt: get(task, 'status.startedAt'),
       endAt: get(task, 'status.finishedAt'),
@@ -305,6 +307,7 @@ const mapOperationStep = (step, tasks) => {
       startAt: node.startAt,
       endAt: node.endAt,
       taskName: node.taskName,
+      taskUID: node.taskUID,
       reason: node.reason,
       message: node.message,
     })),
@@ -330,7 +333,7 @@ const OperationMapper = (item, tasks) => {
   // an OperationTask list.
   const operationTasks = Array.isArray(tasks) ? tasks : [];
   const operationSteps = (get(item, 'spec.steps') || []).map((step) =>
-    mapOperationStep(step, operationTasks)
+    mapOperationStep(step, operationTasks, get(item, 'metadata.uid'))
   );
 
   return {

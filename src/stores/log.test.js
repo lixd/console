@@ -28,6 +28,7 @@ afterEach(() => {
 
 it('ends loading and exposes an error when the initial log request fails', async () => {
   const store = new LogStore();
+  store.isExpand = true;
   request.get.mockRejectedValue({
     reason: 'agent Task log endpoint is unavailable',
   });
@@ -79,4 +80,77 @@ it('ends loading and allows retry when expanding a failed log request', async ()
 
   expect(store.isLoading).toBe(false);
   expect(store.logError).toBe('request failed');
+});
+
+it.each(['resolve', 'reject'])(
+  'ignores a late %s after reset without reopening the log',
+  async (outcome) => {
+    let finish;
+    request.get.mockImplementationOnce(
+      () =>
+        new Promise((resolve, reject) => {
+          finish =
+            outcome === 'resolve'
+              ? () => resolve({ content: 'old', deliverySize: 3 })
+              : () => reject(new Error('old error'));
+        })
+    );
+    const store = new LogStore();
+    store.isExpand = true;
+    const oldRead = store.getStepLog({ taskName: 'old-task' });
+    store.isExpand = false;
+    store.logReset();
+    finish();
+    await oldRead;
+    expect(store.logdata).toBe('');
+    expect(store.logError).toBe('');
+    expect(store.cumulativeSize).toBe(0);
+    expect(store.isExpand).toBe(false);
+    expect(store.isLoading).toBe(false);
+  }
+);
+
+it('serializes a terminal read behind an in-flight poll using the delivered byte offset', async () => {
+  let finish;
+  request.get
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    )
+    .mockResolvedValueOnce({ content: 'tail', deliverySize: 4, logSize: 7 });
+  const store = new LogStore();
+  const poll = store.fetchStepLog({ taskName: 'task-1' });
+  store.isStepFinished = true;
+  const tail = store.fetchStepLog({ taskName: 'task-1' });
+  expect(request.get).toHaveBeenCalledTimes(1);
+  finish({ content: '中', deliverySize: 3, logSize: 3 });
+  await Promise.all([poll, tail]);
+  expect(request.get).toHaveBeenLastCalledWith(expect.any(String), {
+    offset: 3,
+  });
+  expect(store.logdata).toBe('中tail');
+  expect(store.cumulativeSize).toBe(7);
+});
+
+it('allows a fresh read after reset while the old request remains pending', async () => {
+  let finish;
+  request.get
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    )
+    .mockResolvedValueOnce({ content: 'new', deliverySize: 3, logSize: 3 });
+  const store = new LogStore();
+  const oldRead = store.getStepLog({ taskName: 'task-1' });
+  store.logReset();
+  await store.getStepLog({ taskName: 'task-2' });
+  finish({ content: 'old', deliverySize: 3, logSize: 3 });
+  await oldRead;
+  expect(store.logdata).toBe('new');
+  expect(store.cumulativeSize).toBe(3);
+  expect(store.isLoading).toBe(false);
 });

@@ -620,6 +620,7 @@
   "Please enter a legal domain": "Please enter a legal domain",
   "External Access Domain": "External Access Domain",
   "Failed to load task logs": "Failed to load task logs",
+  "Task execution failed": "Task execution failed",
   "Retry loading logs": "Retry loading logs",
   "WorkLoad": "WorkLoad"
 }
