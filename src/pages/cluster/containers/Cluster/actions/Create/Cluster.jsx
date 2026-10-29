@@ -13,18 +13,13 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+import React from 'react';
 import { observer } from 'mobx-react';
 import { toJS } from 'mobx';
 import BaseForm from 'components/Form';
 import { rootStore } from 'stores';
 import { fqdn, path } from 'utils/regex';
-import {
-  isIPv4,
-  isIpv6,
-  isDomain,
-  isDomainPort,
-  isIp,
-} from 'utils/validate';
+import { isIPv4, isIpv6, isDomain, isDomainPort, isIp } from 'utils/validate';
 import {
   clusterParams,
   IPVersionOptions,
@@ -38,6 +33,7 @@ import {
 import KeyValueInput from 'components/FormItem/KeyValueInput';
 import { versionCompare } from 'utils';
 import { find, filter, get } from 'lodash';
+import { registryAddress, registryAddressError } from 'utils/registry';
 
 const cidrRegex = require('cidr-regex');
 
@@ -60,10 +56,9 @@ export default class Cluster extends BaseForm {
 
     await Promise.all([
       this.getBackupPoint(),
-      this.registryStore.fetchList({ limit: -1 }),
-      this.store.fetchVersion({ limit: -1 }),
+      this.loadRegistries(),
+      this.loadCreationMetadata(),
     ]);
-    await this.initVersions();
   }
 
   allowed = () => Promise.resolve();
@@ -97,53 +92,69 @@ export default class Cluster extends BaseForm {
     await this.backupPointStore.fetchList();
   }
 
-  initVersions = () => {
-    const { useTemplate, offline } = this.props.context;
-
-    if (useTemplate) {
-      const { kubernetesVersion } = this.props.context;
-
-      const versions = this.isOffLine
-        ? this.offlineVersions
-        : this.onlineVersions;
-
-      const currentK8sVersions = versions.find(
-        (item) => item.value === kubernetesVersion
-      );
-      const { cri = [], cni = [] } = currentK8sVersions.version_control;
-      const containerdVersions = filter(cri, ['name', 'containerd']);
-      const dockerVersions = filter(cri, ['name', 'docker']);
-      const calicoVersions = filter(cni, ['name', 'calico']);
-
-      this.updateContext({
-        kubernetesVersions: versions,
-        containerdVersions,
-        dockerVersions,
-        calicoVersions,
-      });
-    } else {
-      this.handleImgType(offline);
+  async loadCreationMetadata() {
+    try {
+      await this.store.fetchCreationMetadata({ limit: -1 });
+      this.setState({ metadataError: false });
+      await this.initVersions();
+      if (!this.props.context.imageRegistry) {
+        const imageRegistry = this.store.defaultImageRegistry;
+        await this.updateContext({ imageRegistry });
+        this.updateFormValue('imageRegistry', imageRegistry || undefined);
+      }
+    } catch (error) {
+      this.setState({ metadataError: true });
     }
-  };
+  }
 
-  handleImgType = async (isOffLine) => {
-    const versions = isOffLine ? this.offlineVersions : this.onlineVersions;
-    const [firstVersion] = versions;
-    const currentVersions = this.getCurrentVersionsByK8s(firstVersion);
-    const imageRegistry = '';
+  async loadRegistries() {
+    try {
+      await this.registryStore.fetchList({ limit: -1 });
+      this.setState({ registryError: false });
+    } catch (error) {
+      this.setState({ registryError: true });
+    }
+  }
 
+  initVersions = async () => {
+    const { context } = this.props;
+    const versions = this.availableVersions;
+    const current = context.kubernetesVersion
+      ? versions.find((item) => item.value === context.kubernetesVersion)
+      : versions[0];
+    const currentVersions = this.getCurrentVersionsByK8s(current);
+    ['containerdVersion', 'dockerVersion', 'calicoVersion'].forEach((key) => {
+      currentVersions[key] = context[key] || currentVersions[key];
+    });
+    const kubernetesVersion = context.kubernetesVersion || current?.value;
     await this.updateContext({
-      offline: isOffLine,
-      imageRegistry,
       kubernetesVersions: versions,
-      kubernetesVersion: firstVersion?.value,
+      kubernetesVersion,
       ...currentVersions,
     });
     this.updateFormVersions({
-      kubernetesVersion: firstVersion?.value,
+      kubernetesVersion,
       ...currentVersions,
     });
-    this.updateFormValue('imageRegistry', imageRegistry);
+  };
+
+  onImageRegistryChange = (imageRegistry) => {
+    this.updateContext({ imageRegistry });
+  };
+
+  checkImageRegistry = (rule, value) => {
+    if (!value) return Promise.resolve();
+    const registry = (this.registryStore.list.data || []).find(
+      (item) => item.name === value
+    );
+    if (!registry)
+      return Promise.reject(
+        t(
+          'The selected image registry no longer exists. Select another source.'
+        )
+      );
+    const error = registryAddressError(registry);
+    return error ? Promise.reject(t(error)) : Promise.resolve();
   };
 
   updateFormVersions(versions) {
@@ -191,25 +202,50 @@ export default class Cluster extends BaseForm {
   }
 
   get registryOptions() {
-    return toJS(this.registryStore.list.data || []).map(({ name, host, scheme }) => ({
-      value: name,
-      label: `${name} (${scheme}://${host})`,
-    }));
+    return [
+      ...toJS(this.registryStore.list.data || []).map((registry) => {
+        const error = registryAddressError(registry);
+        return {
+          value: registry.name,
+          label: `${registry.name}${
+            error ? ` — ${t('Invalid registry address')}` : ''
+          } (${registryAddress(registry)})`,
+          title: error ? t(error) : registryAddress(registry),
+          disabled: !!error,
+        };
+      }),
+    ];
   }
 
-  get onlineVersions() {
-    const data = this.store.onlineVersion;
-    return data.map(({ version, version_control, archs }) => ({
-      value: version,
-      label: version,
-      version_control,
-      extra: archs,
-    }));
+  get registryExtra() {
+    if (this.state.registryError)
+      return (
+        <span>
+          {t('Unable to load image registries.')}{' '}
+          <a onClick={() => this.loadRegistries()}>{t('Retry')}</a>
+        </span>
+      );
+    const { imageRegistry } = this.props.context;
+    const registry = (this.registryStore.list.data || []).find(
+      (item) => item.name === imageRegistry
+    );
+    if (registry)
+      return registryAddressError(registry)
+        ? t(registryAddressError(registry))
+        : null;
+    if (imageRegistry)
+      return t(
+        'The selected image registry no longer exists. Select another source.'
+      );
+    if (!this.registryOptions.length)
+      return t('Please configure a Registry resource first');
+    if (this.store?.defaultImageRegistryError)
+      return t('Unable to read the platform default registry. Select an image registry.');
+    return t('Select an image registry. No platform default is configured.');
   }
 
-  get offlineVersions() {
-    const data = this.store.offlineVersion;
-
+  get availableVersions() {
+    const data = this.store.versions;
     return data.map(({ version, version_control, archs }) => ({
       value: version,
       label: version,
@@ -235,10 +271,6 @@ export default class Cluster extends BaseForm {
     //   return Promise.reject(t('The ip is already occupied！'));
     // }
     Promise.resolve(true);
-
-  get isOffLine() {
-    return this.props.context.offline;
-  }
 
   get isDocker() {
     const type = this.state.containerRuntimeType;
@@ -328,11 +360,12 @@ export default class Cluster extends BaseForm {
   };
 
   checkK8sVersion = (rule, value) => {
-    const { arch, offline } = this.props.context;
-    const versions = this.store[`${offline ? 'offline' : 'online'}Version`];
+    if (this.state.metadataError)
+      return Promise.reject(t('Unable to load versions. Please retry.'));
+    const { arch } = this.props.context;
+    const { versions } = this.store;
     const current = versions.find((item) => item.version === value);
-
-    if (current.archs.includes(arch)) {
+    if (current?.archs.includes(arch)) {
       return Promise.resolve(true);
     }
     return Promise.reject(t('The selected node and schema are inconsistent'));
@@ -408,52 +441,36 @@ export default class Cluster extends BaseForm {
     return [
       [
         {
-          name: 'offline',
-          label: t('Image Type'),
-          type: 'radio',
-          optionType: 'default',
+          name: 'kubernetesVersion',
+          label: t('K8S Version'),
+          type: 'select-value',
           required: true,
-          options: [
-            {
-              label: t('Online'),
-              value: false,
-            },
-            {
-              label: t('Offline'),
-              value: true,
-            },
-          ],
-          extra: this.isOffLine
-            ? t(
-                'Offline installation: The public network environment is not required, and the configuration package is pulled from the local server.'
-              )
-            : t(
-                'Online installation: The public network environment is required, and the configuration package is pulled from the official registry.'
-              ),
-          onChange: this.handleImgType,
+          options: this.props.context.kubernetesVersions || [],
+          validator: this.checkK8sVersion,
+          onChange: this.onK8SVersionChange,
+          extra: this.state.metadataError ? (
+            <span>
+              {t(
+                'Unable to load versions. Please retry.'
+              )}{' '}
+              <a onClick={() => this.loadCreationMetadata()}>{t('Retry')}</a>
+            </span>
+          ) : null,
         },
         {
           name: 'imageRegistry',
           label: t('Image Registry'),
           type: 'select',
           options: this.registryOptions,
-          extra: this.isOffLine
-            ? t(
-                'Optionally select a configured Registry resource. If none is selected, offline installation loads packaged images on each node.'
-              )
-            : t(
-                'Optionally select a configured Registry resource for image pulls. If none is selected, images are pulled from the official registries.'
-              ),
-        },
-        {
-          name: 'kubernetesVersion',
-          label: t('K8S Version'),
-          type: 'select-value',
-          required: true,
-          // options: this.getMetaVersion('k8s', 'onlineVersion'),
-          options: this.props.context.kubernetesVersions || [],
-          validator: this.checkK8sVersion,
-          onChange: this.onK8SVersionChange,
+          tip: t(
+            'Used to pull container images for Kubernetes, Calico and other components.'
+          ),
+          onChange: this.onImageRegistryChange,
+          rules: [
+            { required: true, message: t('Please select a Registry resource') },
+            { validator: this.checkImageRegistry },
+          ],
+          extra: this.registryExtra,
         },
         {
           name: 'etcdDataDir',
@@ -529,7 +546,7 @@ export default class Cluster extends BaseForm {
         {
           name: 'dockerVersion',
           label: t('Docker Version'),
-          type: this.isOffLine ? 'select' : 'select-input',
+          type: 'select',
           // options: this.props.context.dockerVersions,
           options: this.getMetaVersion(this.props.context.dockerVersions),
           hidden: !this.isDocker,
@@ -558,7 +575,6 @@ export default class Cluster extends BaseForm {
           type: 'select',
           options: this.getMetaVersion(this.props.context.containerdVersions),
           hidden: this.isDocker,
-          // hidden: this.isDocker || this.isOffLine,
           required: true,
         },
         {

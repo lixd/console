@@ -15,10 +15,10 @@
  */
 import React from 'react';
 import { observer } from 'mobx-react';
-import { toJS } from 'mobx';
 import { ModalAction } from 'containers/Action';
 import { rootStore } from 'stores';
 import styles from './index.less';
+import { registryAddress } from 'utils/registry';
 import {
   versionCompare,
   versionCross,
@@ -47,22 +47,23 @@ export default class Upgrade extends ModalAction {
   }
 
   initDefaultValue = async () => {
-    const { offline, imageRegistry } = this.item;
     this.setState({
-      offline,
-      targetVersions: this.getMetaVersion(offline),
-      imageRegistry,
+      targetVersions: this.getMetaVersion(),
     });
     this.updateDefaultValue();
   };
 
   get defaultValue() {
-    const { offline, imageRegistry = '' } = this.state;
-    const versions = this.getMetaVersion(offline);
+    const { imageRegistry = '' } = this.item;
+    const registry = (this.registryStore.list.data || []).find(
+      ({ name }) => name === imageRegistry
+    );
+    const versions = this.getMetaVersion();
     return {
-      offline,
       version: versions[0]?.value,
-      imageRegistry,
+      imageRegistry: registry
+        ? `${registry.name} (${registryAddress(registry)})`
+        : imageRegistry,
     };
   }
 
@@ -83,19 +84,6 @@ export default class Upgrade extends ModalAction {
       type: 'info',
     };
   }
-
-  handleImgType = async (offline) => {
-    const versions = this.getMetaVersion(offline);
-    const imageRegistry = '';
-
-    await this.setState({
-      offline,
-      imageRegistry,
-      targetVersions: versions,
-      version: versions?.[0]?.value,
-    });
-    this.updateDefaultValue();
-  };
 
   async getVersion() {
     await this.store.fetchVersion({ limit: -1 });
@@ -120,11 +108,10 @@ export default class Upgrade extends ModalAction {
         !isDisableByProviderType(item, ['kubeadm'])
     );
 
-  getMetaVersion(offline) {
-    const versionTitle = offline ? 'offlineVersion' : 'onlineVersion';
+  getMetaVersion() {
     const { kubernetesVersion: currentVersion } = this.item;
 
-    const data = this.store[versionTitle].filter(
+    const data = this.store.versions.filter(
       ({ version }) => versionCompare(currentVersion, version) < 0
     );
     return (data || []).map(({ version }) => ({
@@ -133,44 +120,12 @@ export default class Upgrade extends ModalAction {
     }));
   }
 
-  get registryOptions() {
-    return toJS(this.registryStore.list.data || []).map(
-      ({ name, host, scheme }) => ({
-        value: name,
-        label: `${name} (${scheme}://${host})`,
-      })
-    );
-  }
-
-  get isOffLine() {
-    const { offline } = this.state;
-    return offline === true;
-  }
-
   get formItems() {
     return [
       {
-        name: 'offline',
-        label: t('Image Type'),
-        type: 'radio',
-        optionType: 'default',
-        options: [
-          {
-            label: t('Online'),
-            value: false,
-          },
-          {
-            label: t('Offline'),
-            value: true,
-          },
-        ],
-        tip: t('TIP_CLUSTER_IMAGE_TYPE_DESC'),
-        onChange: this.handleImgType,
-      },
-      {
         name: 'version',
         label: t('Target Version'),
-        type: this.isOffLine ? 'select' : 'select-input',
+        type: 'select',
         options: this.state.targetVersions,
         rules: [
           {
@@ -196,11 +151,9 @@ export default class Upgrade extends ModalAction {
       {
         name: 'imageRegistry',
         label: t('Image Registry'),
-        type: 'select',
-        options: this.registryOptions,
-        hidden: !this.isOffLine,
+        type: 'label',
         tip: t(
-          'Optionally select a configured Registry resource. If none is selected, offline installation loads packaged images on each node.'
+          'Used to pull container images for Kubernetes, Calico and other components.'
         ),
       },
     ];
@@ -223,7 +176,8 @@ export default class Upgrade extends ModalAction {
     return this.props.item.name;
   }
 
-  onSubmit = (values) => this.store.upgrade(values, { cluster: this.cluster });
+  onSubmit = ({ version }) =>
+    this.store.upgrade({ version }, { cluster: this.cluster });
 
   successCallback = () => this.store.fetchList({ cluster: this.cluster });
 }

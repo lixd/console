@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 /*
  * Copyright 2021 KubeClipper Authors.
  *
@@ -18,9 +17,9 @@ import { toJS } from 'mobx';
 import { observer } from 'mobx-react';
 import { ModalAction } from 'containers/Action';
 import { rootStore } from 'stores';
-import { isIp, isIpPort, isDomainPath } from 'utils/validate';
 import FORM_TEMPLATES from 'utils/form.templates';
 import { merge } from 'lodash';
+import { parseRegistryAddress, registryAddress } from 'utils/registry';
 
 @observer
 class Add extends ModalAction {
@@ -44,10 +43,7 @@ class Add extends ModalAction {
 
   get defaultValue() {
     return {
-      host: {
-        prefix: 'http',
-        ip: '',
-      },
+      address: '',
       tlsCheck: true,
     };
   }
@@ -55,28 +51,18 @@ class Add extends ModalAction {
   static allowed = () => Promise.resolve(true);
 
   checkAddress = async (_, value) => {
-    const currentData = toJS(this.store.list.data);
-
-    const { prefix, ip } = value;
-    const address = `${prefix}://${ip}`;
-    // 地址可以是：域名+ 端口 或 ip + 端口
-    for (const item of currentData) {
-      if (`${item.scheme}://${item.host}` === address)
-        return Promise.reject(t('Registry Repeat'));
-    }
-    if (!ip) {
-      return Promise.reject(t('Registry cannot be empty'));
-    }
-    if (!isIp(ip) && !isIpPort(ip) && !isDomainPath(ip)) {
-      return Promise.reject(t('Please input correct ip or domain'));
-    }
-    return Promise.resolve();
+    const address = parseRegistryAddress(value);
+    if (!address)
+      return Promise.reject(
+        t(
+          'Enter a complete registry address, such as https://harbor.example.com/kubeclipper.'
+        )
+      );
+    const duplicate = toJS(this.store.list.data || []).some(
+      (item) => registryAddress(item) === registryAddress(address)
+    );
+    return duplicate ? Promise.reject(t('Registry Repeat')) : Promise.resolve();
   };
-
-  onHostChange = (value) =>
-    this.setState({
-      prefix: value.prefix,
-    });
 
   onTlsChange = (value) =>
     this.setState({
@@ -84,8 +70,13 @@ class Add extends ModalAction {
     });
 
   get formItems() {
-    const { tlsCheck = true, prefix = 'http' } = this.state;
-    const isHttps = prefix === 'https';
+    const {
+      tlsCheck = true,
+      address = '',
+      authEnabled = false,
+      showCertificates = false,
+    } = this.state;
+    const isHttps = address.startsWith('https://');
     const isCheckTls = isHttps && tlsCheck;
 
     return [
@@ -102,18 +93,45 @@ class Add extends ModalAction {
         placeholder: t('Please input description'),
       },
       {
-        name: 'host',
+        name: 'address',
         label: t('Registry Address'),
-        type: 'ip-group',
+        type: 'input',
+        placeholder: 'https://harbor.example.com/kubeclipper',
         validator: this.checkAddress,
         required: true,
-        onChange: this.onHostChange,
+        onChange: (event) => this.setState({ address: event.target.value }),
+      },
+      {
+        name: 'authEnabled',
+        label: t('Registry authentication'),
+        type: 'switch',
+        onChange: (value) => this.setState({ authEnabled: value }),
+      },
+      {
+        name: 'registryUsername',
+        label: t('Registry username'),
+        type: 'input',
+        required: authEnabled,
+        hidden: !authEnabled,
+      },
+      {
+        name: 'registryPassword',
+        label: t('Registry password or token'),
+        type: 'input-password',
+        required: authEnabled,
+        hidden: !authEnabled,
+      },
+      {
+        name: 'showCertificates',
+        type: 'more',
+        hidden: !isHttps,
+        onChange: (value) => this.setState({ showCertificates: value }),
       },
       {
         name: 'tlsCheck',
         label: t('TLS Check'),
         type: 'switch',
-        hidden: !isHttps,
+        hidden: !isHttps || !showCertificates,
         onChange: this.onTlsChange,
       },
       {
@@ -121,14 +139,23 @@ class Add extends ModalAction {
         label: t('CA Certificate'),
         type: 'textarea',
         placeholder: t('Please input certificate'),
-        hidden: !isHttps || !isCheckTls,
+        hidden: !showCertificates || !isCheckTls,
       },
     ];
   }
 
   onSubmit = (values) => {
-    const { name, host: address, description, ca, tlsCheck } = values;
-    const { prefix: scheme, ip: host } = address;
+    const {
+      name,
+      address,
+      description,
+      ca,
+      tlsCheck,
+      authEnabled,
+      registryUsername,
+      registryPassword,
+    } = values;
+    const { scheme, host, repositoryPrefix } = parseRegistryAddress(address);
 
     const data = {
       metadata: {
@@ -138,9 +165,13 @@ class Add extends ModalAction {
         },
       },
       host,
-      ca,
+      repositoryPrefix,
+      ...(authEnabled
+        ? { auth: { username: registryUsername, password: registryPassword } }
+        : {}),
+      ca: scheme === 'https' && tlsCheck !== false ? ca : undefined,
       scheme,
-      skipVerify: !tlsCheck,
+      skipVerify: scheme === 'https' && tlsCheck === false,
     };
 
     const formTemplate = merge(FORM_TEMPLATES[this.module](), data);

@@ -26,9 +26,11 @@ export default class ClusterStore extends BaseStore {
 
   components = [];
 
-  onlineVersion = [];
+  versions = [];
 
-  offlineVersion = [];
+  defaultImageRegistry = '';
+
+  defaultImageRegistryError = '';
 
   scNames = [];
 
@@ -80,8 +82,19 @@ export default class ClusterStore extends BaseStore {
   }
 
   async fetchVersion(params) {
-    await this.fetchOnlineVersion(params);
-    await this.fetchOfflineVersion(params);
+    return this.fetchCreationMetadata(params);
+  }
+
+  async fetchCreationMetadata(params) {
+    const result = await request.get(
+      `${APIVERSION.config}/componentmeta`,
+      params
+    );
+    const versions = this.normalizeVersions(get(result, 'rules') || []);
+    this.versions = versions;
+    this.defaultImageRegistry = result.defaultImageRegistry || '';
+    this.defaultImageRegistryError = result.defaultImageRegistryError || '';
+    return result;
   }
 
   normalizeVersions(rules = []) {
@@ -105,36 +118,6 @@ export default class ClusterStore extends BaseStore {
     return Array.from(versions.values())
       .sort((a, b) => versionCompare(a.version, b.version))
       .reverse();
-  }
-
-  async fetchOnlineVersion(params) {
-    try {
-      const onlineResult = await request.get(
-        `${APIVERSION.config}/componentmeta`,
-        {
-          ...params,
-          online: true,
-        }
-      );
-      const onlineData = get(onlineResult, 'rules') || [];
-
-      this.onlineVersion = this.normalizeVersions(onlineData);
-    } catch (e) {}
-  }
-
-  async fetchOfflineVersion(params) {
-    try {
-      const offlineResult = await request.get(
-        `${APIVERSION.config}/componentmeta`,
-        {
-          ...params,
-          online: false,
-        }
-      );
-      const offlineData = get(offlineResult, 'rules') || [];
-
-      this.offlineVersion = this.normalizeVersions(offlineData);
-    } catch (e) {}
   }
 
   async upgrade(data, { cluster }) {

@@ -162,7 +162,6 @@ export default class Create extends StepAction {
       // region,
       /* step2: Cluster config */
       // image
-      offline,
       imageRegistry,
       certSANs,
       etcdDataDir,
@@ -208,7 +207,6 @@ export default class Create extends StepAction {
     const { IPv4AutoDetection, IPv6AutoDetection } =
       computeAutoDetection(values);
 
-    const offlineAnnotations = offline ? { 'kubeclipper.io/offline': '' } : {};
     const externalIPLabel = externalIP
       ? { 'kubeclipper.io/externalIP': externalIP }
       : {};
@@ -221,7 +219,6 @@ export default class Create extends StepAction {
         },
         annotations: {
           'kubeclipper.io/description': description,
-          ...offlineAnnotations,
         },
       },
       certSANs: arrayInputValue(certSANs),

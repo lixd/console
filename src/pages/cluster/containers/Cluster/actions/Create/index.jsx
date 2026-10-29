@@ -168,7 +168,6 @@ export default class Create extends StepAction {
       taints,
       /* step2: Cluster config */
       // image
-      offline,
       imageRegistry,
       kubernetesVersion,
       certSANs,
@@ -240,7 +239,6 @@ export default class Create extends StepAction {
       ? { 'kubeclipper.io/externalDomainPort': domainPort }
       : {};
 
-    const offlineAnnotations = offline ? { 'kubeclipper.io/offline': '' } : {};
     const params = {
       kind: 'Cluster',
       apiVersion: 'core.kubeclipper.io/v1',
@@ -257,7 +255,6 @@ export default class Create extends StepAction {
         },
         annotations: {
           'kubeclipper.io/description': description,
-          ...offlineAnnotations,
         },
       },
       provider: {

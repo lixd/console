@@ -107,7 +107,6 @@ const ClusterMapper = (item) => {
   );
   const { masters, workers = [], nodes = [] } = item;
   const mastersByIp = intersectionBy(nodes, masters, 'id');
-  const offline = has(metadata.annotations, 'kubeclipper.io/offline');
   const isDualStack = get(networking, 'ipFamily') === 'IPv4+IPv6';
   const [podIPv4CIDR, podIPv6CIDR] = get(networking, 'pods.cidrBlocks');
   const [serviceSubnet, serviceSubnetV6] = get(
@@ -126,7 +125,6 @@ const ClusterMapper = (item) => {
     licenseExpirationTime,
     nodeList: [...masters, ...workers],
     mastersByIp,
-    offline,
     isDualStack,
     podIPv4CIDR,
     podIPv6CIDR,
@@ -163,7 +161,6 @@ const ClusterTemplateMapper = (item) => {
   );
   const isDualStack = get(config, 'networking.ipFamily') === 'IPv4+IPv6';
 
-  const offline = has(config.metadata, 'annotations["kubeclipper.io/offline"]');
   const description = get(
     config.metadata,
     'annotations["kubeclipper.io/description"]'
@@ -186,7 +183,6 @@ const ClusterTemplateMapper = (item) => {
   const externalCaCert = get(config, 'externalCaCert');
 
   return {
-    offline,
     description,
     externalIP,
     backupPoint,
@@ -282,7 +278,8 @@ const mapOperationStep = (step, tasks, operationUID, retryGeneration) => {
       reason: get(task, 'status.result.reason'),
       message: get(task, 'status.result.message'),
       previousAttempt:
-        !!task && Number(get(task, 'spec.retryGeneration', 0)) < retryGeneration,
+        !!task &&
+        Number(get(task, 'spec.retryGeneration', 0)) < retryGeneration,
     };
   });
 

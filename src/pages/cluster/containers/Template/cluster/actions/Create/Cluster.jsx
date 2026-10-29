@@ -18,11 +18,7 @@ import { toJS } from 'mobx';
 import BaseForm from 'components/Form';
 import { rootStore } from 'stores';
 import { fqdn } from 'utils/regex';
-import {
-  isIPv4,
-  isIpv6,
-  isDomain,
-} from 'utils/validate';
+import { isIPv4, isIpv6, isDomain } from 'utils/validate';
 import {
   clusterParams,
   IPVersionOptions,
@@ -35,6 +31,7 @@ import {
 } from 'resources/cluster';
 import KeyValueInput from 'components/FormItem/KeyValueInput';
 import { versionCompare } from 'utils';
+import { registryAddress, registryAddressError } from 'utils/registry';
 import { find, filter, get } from 'lodash';
 
 const cidrRegex = require('cidr-regex');
@@ -80,9 +77,7 @@ export default class Cluster extends BaseForm {
       const { templateName, templateDescription, flatData } = vals;
       const { kubernetesVersion } = flatData;
 
-      const versions = this.isOffLine
-        ? this.offlineVersions
-        : this.onlineVersions;
+      const versions = this.availableVersions;
 
       const currentK8sVersions = versions.find(
         (item) => item.value === kubernetesVersion
@@ -98,9 +93,7 @@ export default class Cluster extends BaseForm {
         ...this.props.context,
       });
     } else {
-      const isOffLine = this.props.isOffLine || clusterParams;
-
-      const versions = isOffLine ? this.offlineVersions : this.onlineVersions;
+      const versions = this.availableVersions;
       const [firstVersion] = versions;
       const currentVersions = this.getCurrentVersionsByK8s(firstVersion);
 
@@ -112,28 +105,12 @@ export default class Cluster extends BaseForm {
         ...this.props.context,
       });
     }
+    if (!this.props.context.imageRegistry) {
+      await this.updateContext({
+        imageRegistry: this.store.defaultImageRegistry,
+      });
+    }
     this.updateDefaultValue();
-  };
-
-  handleImgType = async (isOffLine) => {
-    const versions = isOffLine ? this.offlineVersions : this.onlineVersions;
-    const [firstVersion] = versions;
-    const currentVersions = this.getCurrentVersionsByK8s(firstVersion);
-    const imageRegistry = '';
-
-    await this.updateContext({
-      offline: isOffLine,
-      imageRegistry,
-      kubernetesVersions: versions,
-      kubernetesVersion: firstVersion?.value,
-      ...currentVersions,
-    });
-
-    this.updateFormVersions({
-      kubernetesVersion: firstVersion?.value,
-      ...currentVersions,
-    });
-    this.updateFormValue('imageRegistry', imageRegistry);
   };
 
   updateFormVersions(versions) {
@@ -174,19 +151,8 @@ export default class Cluster extends BaseForm {
     };
   }
 
-  get onlineVersions() {
-    const data = this.store.onlineVersion;
-    return data.map(({ version, version_control, archs }) => ({
-      value: version,
-      label: version,
-      version_control,
-      extra: archs,
-    }));
-  }
-
-  get offlineVersions() {
-    const data = this.store.offlineVersion;
-
+  get availableVersions() {
+    const data = this.store.versions;
     return data.map(({ version, version_control, archs }) => ({
       value: version,
       label: version,
@@ -208,9 +174,10 @@ export default class Cluster extends BaseForm {
   }
 
   get registryOptions() {
-    return toJS(this.registryStore.list.data || []).map(({ name, host, scheme }) => ({
-      value: name,
-      label: `${name} (${scheme}://${host})`,
+    return toJS(this.registryStore.list.data || []).map((registry) => ({
+      value: registry.name,
+      label: `${registry.name} (${registryAddress(registry)})`,
+      disabled: !!registryAddressError(registry),
     }));
   }
 
@@ -253,10 +220,6 @@ export default class Cluster extends BaseForm {
     //   return Promise.reject(t('The ip is already occupied！'));
     // }
     Promise.resolve(true);
-
-  get isOffLine() {
-    return this.props.context.offline;
-  }
 
   get isDocker() {
     const { containerRuntimeType } = this.props.context;
@@ -430,33 +393,12 @@ export default class Cluster extends BaseForm {
       ],
       [
         {
-          name: 'offline',
-          label: t('Image Type'),
-          type: 'radio',
-          optionType: 'default',
-          required: true,
-          options: [
-            {
-              label: t('Online'),
-              value: false,
-            },
-            {
-              label: t('Offline'),
-              value: true,
-            },
-          ],
-          tip: t(
-            '"Online" to automatically pull image from the k8s official website gcr.k8s.io; "Offline" to specify other image sources.'
-          ),
-          onChange: this.handleImgType,
-        },
-        {
           name: 'imageRegistry',
           label: t('Image Registry'),
           type: 'select',
           options: this.registryOptions,
           tip: t(
-            'Optionally select a configured Registry resource. If none is selected, offline installation loads packaged images on each node.'
+            'Used to pull container images for Kubernetes, Calico and other components.'
           ),
         },
         {
@@ -531,7 +473,7 @@ export default class Cluster extends BaseForm {
         {
           name: 'dockerVersion',
           label: t('Docker Version'),
-          type: this.isOffLine ? 'select' : 'select-input',
+          type: 'select',
           options: this.getMetaVersion(this.props.context.dockerVersions),
           hidden: !this.isDocker,
           rules: [

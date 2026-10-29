@@ -15,6 +15,7 @@
  */
 
 import { observer } from 'mobx-react';
+import { registryAddress } from 'utils/registry';
 import BaseForm from 'components/Form';
 import { arrayInputValue } from 'utils';
 import { get, isEmpty } from 'lodash';
@@ -206,8 +207,13 @@ export class ConfirmStep extends BaseForm {
 
   getClusterItems = () => {
     const { context } = this.props;
+    const selectedRegistry = rootStore.registryStore.list.data.find(
+      (item) => item.name === context.imageRegistry
+    );
+    const imageSource = selectedRegistry
+      ? `${selectedRegistry.name} (${registryAddress(selectedRegistry)})`
+      : context.imageRegistry;
     const {
-      offline,
       kubernetesVersion,
       containerRuntimeType,
       dnsDomain,
@@ -223,10 +229,9 @@ export class ConfirmStep extends BaseForm {
       ...this.notFilled(t('Description'), 'description'),
       ...this.notFilled(t('External Access IP'), 'externalIP.ip'),
       {
-        label: t('Image Type'),
-        value: offline ? t('Offline') : t('Online'),
+        label: t('Image Registry'),
+        value: imageSource || '—',
       },
-      ...this.notFilled(t('Image Registry'), 'imageRegistry'),
       {
         label: t('K8S Version'),
         value: kubernetesVersion,
