@@ -29,6 +29,9 @@ const hasJsxRuntime = (() => {
 })();
 
 module.exports = babelJest.createTransformer({
+  plugins: [
+    [require.resolve('@babel/plugin-proposal-decorators'), { legacy: true }],
+  ],
   presets: [
     [
       require.resolve('babel-preset-react-app'),
