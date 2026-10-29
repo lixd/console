@@ -38,7 +38,7 @@ module.exports = {
     '[/\\\\]node_modules[/\\\\].+\\.(js|jsx|mjs|cjs|ts|tsx)$',
     '^.+\\.module\\.(css|sass|scss)$',
   ],
-  modulePaths: [],
+  modulePaths: ['<rootDir>/src'],
   moduleNameMapper: {
     '^.+\\.module\\.(css|sass|scss)$': 'identity-obj-proxy',
     '^core/(.*)$': '<rootDir>/src/core/$1',
