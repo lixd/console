@@ -621,6 +621,11 @@
   "External Access Domain": "外部访问域名",
   "Failed to load task logs": "任务日志加载失败",
   "Task execution failed": "任务执行失败",
+  "Task canceled": "任务已取消",
+  "Task timed out": "任务超时",
+  "Operation timed out before this task started": "操作超时，任务未开始",
+  "Previous attempt": "上次执行",
+  "Failure ignored": "失败已忽略",
   "Retry loading logs": "重新加载日志",
   "WorkLoad": "工作负载"
 }

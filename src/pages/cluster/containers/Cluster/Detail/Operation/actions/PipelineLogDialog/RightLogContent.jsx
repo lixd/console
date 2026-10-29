@@ -38,7 +38,7 @@ function LogItemContent(props) {
     } else {
       return (
         <div className={styles['log-item-content']}>
-          {logdata && <pre>{logdata}</pre>}
+          {logdata && <pre className={styles['log-output']}>{logdata}</pre>}
         </div>
       );
     }
@@ -56,6 +56,7 @@ const LogItem = observer((props) => {
     index,
     reason,
     message,
+    previousAttempt,
   } = props;
   const inputEl = useRef();
   const initiallyExpanded = useRef(index === 0);
@@ -130,7 +131,15 @@ const LogItem = observer((props) => {
   };
 
   const failed = ['Failed', 'TimedOut', 'Canceled'].includes(nodeStatus);
-  const taskError = [reason, message]
+  const failureTitles = {
+    Canceled: 'Task canceled',
+    TimedOut: 'Task timed out',
+  };
+  const readableReason =
+    reason === 'OperationDeadlineExceededBeforeStart'
+      ? t('Operation timed out before this task started')
+      : reason;
+  const taskError = [readableReason, message === reason ? '' : message]
     .filter(
       (value, position, values) => value && values.indexOf(value) === position
     )
@@ -138,9 +147,18 @@ const LogItem = observer((props) => {
 
   return (
     <div className={styles.LogItem} ref={inputEl}>
-      <div className={classNames(styles.LogItem__title)} onClick={toggleExpand}>
+      <div
+        className={classNames(styles.LogItem__title)}
+        onClick={toggleExpand}
+        title={nodes.ipv4 ? nodes.id : undefined}
+      >
         {isExpand ? <CaretDownOutlined /> : <CaretRightOutlined />}
-        {nodes.ipv4 ? `${nodes.id}(${nodes.ipv4})` : nodes.id}
+        {nodes.ipv4 || nodes.id}
+        {failed && previousAttempt && (
+          <span className={styles['previous-attempt']}>
+            {t('Previous attempt')}
+          </span>
+        )}
         <span className={styles.logitem_status}>
           <span>{runtime || ''}</span>
           {stateIcons(false, nodeStatus)}
@@ -151,7 +169,7 @@ const LogItem = observer((props) => {
           className={styles['task-error']}
           type="error"
           showIcon
-          message={t('Task execution failed')}
+          message={t(failureTitles[nodeStatus] || 'Task execution failed')}
           description={
             <pre className={styles['task-error-message']}>{taskError}</pre>
           }
@@ -209,6 +227,7 @@ function RightLogContent() {
               nodeStatus={taskStatus.status || 'Pending'}
               reason={taskStatus.reason}
               message={taskStatus.message}
+              previousAttempt={taskStatus.previousAttempt}
               taskName={taskName}
               runtime={
                 taskStatus.startAt

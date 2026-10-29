@@ -621,6 +621,11 @@
   "External Access Domain": "External Access Domain",
   "Failed to load task logs": "Failed to load task logs",
   "Task execution failed": "Task execution failed",
+  "Task canceled": "Task canceled",
+  "Task timed out": "Task timed out",
+  "Operation timed out before this task started": "Operation timed out before this task started",
+  "Previous attempt": "Previous attempt",
+  "Failure ignored": "Failure ignored",
   "Retry loading logs": "Retry loading logs",
   "WorkLoad": "WorkLoad"
 }

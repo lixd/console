@@ -113,6 +113,22 @@ it('supports reason-only failures, absent details and text escaping', () => {
   expect(html).not.toContain('<script>');
 });
 
+it('explains a previous task that timed out before it started', () => {
+  mockView = view([
+    {
+      status: 'Canceled',
+      reason: 'OperationDeadlineExceededBeforeStart',
+      previousAttempt: true,
+    },
+  ]);
+  const html = renderToStaticMarkup(<RightLogContent />);
+  expect(html).toContain('Operation timed out before this task started');
+  expect(html).toContain('Task canceled');
+  expect(html).toContain('Previous attempt');
+  expect(html).not.toContain('OperationDeadlineExceededBeforeStart');
+  expect(html).toContain('10.0.0.1');
+});
+
 it('keeps task failure and existing output visible while reading logs, separately from read errors', async () => {
   mockView = view([
     { status: 'Failed', taskName: 'task-1', message: 'executor failed' },

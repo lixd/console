@@ -173,6 +173,16 @@ describe('operation mapper', () => {
     expect(result.operationSteps[0].nodes[0].status).toBe('Succeeded');
     expect(result.operationSteps[0].isComplete).toBe(true);
     expect(result.operationSteps[0].stepStatus).toBe('success');
+    expect(result.operationSteps[0].status[0].previousAttempt).toBe(true);
+  });
+
+  it('marks tasks from the current retry as current', () => {
+    const retryOperation = {
+      ...operation,
+      spec: { ...operation.spec, retryGeneration: 2 },
+    };
+    const result = ObjectMapper.operations(retryOperation, [task('retry', 2)]);
+    expect(result.operationSteps[0].status[0].previousAttempt).toBe(false);
   });
 });
 

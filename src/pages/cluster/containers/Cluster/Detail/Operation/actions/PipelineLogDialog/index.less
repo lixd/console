@@ -160,20 +160,39 @@
 }
 
 .log-item-content {
-  padding: 12px 60px;
+  padding: 16px 20px;
   line-height: 22px;
   background-color: #242e42;
-  color: white;
+  .log-output {
+    color: #e7edf7;
+    font-family: monospace;
+    overflow-wrap: anywhere;
+  }
 }
 
-.task-error {
+.right .task-error {
   margin-top: 8px;
+  background: #392e3b;
+  border-color: #995366;
+  :global {
+    .ant-alert-message,
+    .ant-alert-description {
+      color: #f6e7eb;
+    }
+  }
 }
 
-.task-error-message {
+.right .task-error .task-error-message {
   margin: 0;
+  color: #f6e7eb;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.previous-attempt {
+  margin-left: 10px;
+  color: #b4c1d6;
+  font-size: 12px;
 }
 
 .spin-center {

@@ -50,7 +50,16 @@ const StepItem = observer((props) => {
       onClick={handleStepClick}
     >
       <div className={step.frontStatus ? styles.processing : ''}>
-        <Status errIgnore={step.errIgnore} status={step.stepStatus} text={''} />
+        <Status
+          errIgnore={step.errIgnore}
+          status={step.stepStatus}
+          text={''}
+          hoverText={
+            step.errIgnore && step.stepStatus === 'failed'
+              ? t('Failure ignored')
+              : null
+          }
+        />
       </div>
 
       <span ref={inputEl} className={styles['log-id']}>
@@ -61,9 +70,11 @@ const StepItem = observer((props) => {
 
   return (
     <div className={styles.stageContainer}>
-      <div className={styles.cutTitle}>
-        {toLocalTime(step?.status?.[0]?.startAt) || '-'}
-      </div>
+      {step?.status?.[0]?.startAt && (
+        <div className={styles.cutTitle}>
+          {toLocalTime(step.status[0].startAt)}
+        </div>
+      )}
       {showTip ? (
         <Tooltip title={step.name} color={'#000000'}>
           {stepItem}

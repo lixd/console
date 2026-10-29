@@ -264,7 +264,7 @@ const latestTaskForTarget = (tasks, step, target, operationUID) => {
 const stepName = (step) =>
   get(step, 'payload.step.name') || get(step, 'payload.name') || step.id;
 
-const mapOperationStep = (step, tasks, operationUID) => {
+const mapOperationStep = (step, tasks, operationUID, retryGeneration) => {
   const nodes = (step.targets || []).map((target) => {
     const task = latestTaskForTarget(tasks, step, target, operationUID);
     const phase = taskStatusByPhase(get(task, 'status.phase'));
@@ -281,6 +281,8 @@ const mapOperationStep = (step, tasks, operationUID) => {
       endAt: get(task, 'status.finishedAt'),
       reason: get(task, 'status.result.reason'),
       message: get(task, 'status.result.message'),
+      previousAttempt:
+        !!task && Number(get(task, 'spec.retryGeneration', 0)) < retryGeneration,
     };
   });
 
@@ -310,6 +312,7 @@ const mapOperationStep = (step, tasks, operationUID) => {
       taskUID: node.taskUID,
       reason: node.reason,
       message: node.message,
+      previousAttempt: node.previousAttempt,
     })),
     errIgnore: get(step, 'payload.step.errIgnore', false),
     isComplete,
@@ -333,7 +336,12 @@ const OperationMapper = (item, tasks) => {
   // an OperationTask list.
   const operationTasks = Array.isArray(tasks) ? tasks : [];
   const operationSteps = (get(item, 'spec.steps') || []).map((step) =>
-    mapOperationStep(step, operationTasks, get(item, 'metadata.uid'))
+    mapOperationStep(
+      step,
+      operationTasks,
+      get(item, 'metadata.uid'),
+      Number(get(item, 'spec.retryGeneration', 0))
+    )
   );
 
   return {
