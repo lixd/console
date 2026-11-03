@@ -38,7 +38,7 @@ function BaseDetail() {
       label: t('Container Registry'),
       dataIndex: 'containerRuntime',
       render: (_, record) => {
-        const registry = get(record, '_originData.status.Registries') ?? [];
+        const registry = get(record, '_originData.status.registries') ?? [];
         if (registry.length === 0) return '-';
         return uniq(registry.map((it) => it.host));
       },
@@ -89,12 +89,8 @@ function BaseDetail() {
         dataIndex: 'kubernetesVersion',
       },
       {
-      label: t('Image Registry'),
-        dataIndex: 'offline',
-        render: (_, data) => {
-          const { offline, imageRegistry = 'registry.k8s.io' } = data;
-          return `${offline ? t('Offline') : t('Online')} ${imageRegistry}`;
-        },
+        label: t('Image Registry'),
+        dataIndex: 'imageRegistry',
       },
       {
         label: t('Description'),
@@ -177,7 +173,7 @@ function BaseDetail() {
       },
       {
         label: t('Network Plugin Version'),
-        dataIndex: 'cni.calico.version',
+        dataIndex: 'cni.version',
       },
       {
         label: t('IPManger'),
