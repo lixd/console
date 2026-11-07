@@ -187,7 +187,7 @@ describe('operation mapper', () => {
 });
 
 describe('cluster storage mapper', () => {
-  it('does not expose the retired nfs-provisioner addon', () => {
+  it('does not expose retired addons and keeps NFS CSI', () => {
     const result = ObjectMapper.clusters({
       metadata: { name: 'cluster-1', annotations: {} },
       networking: {
@@ -197,6 +197,7 @@ describe('cluster storage mapper', () => {
       addons: [
         { name: 'nfs-provisioner', config: {} },
         { name: 'nfs-csi', config: {} },
+        { name: 'metallb', config: {} },
       ],
       masters: [],
       workers: [],
@@ -204,6 +205,8 @@ describe('cluster storage mapper', () => {
     });
 
     expect(uiSchemas.map(({ name }) => name)).not.toContain('nfs-provisioner');
+    expect(uiSchemas.map(({ name }) => name)).not.toContain('metallb');
+    expect(result.plugin.map(({ name }) => name)).not.toContain('metallb');
     expect(result.storage.map(({ name }) => name)).toEqual(['nfs-csi']);
   });
 });

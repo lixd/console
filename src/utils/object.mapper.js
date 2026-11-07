@@ -100,7 +100,7 @@ function filterComponents(array, filters) {
 const ClusterMapper = (item) => {
   const { metadata, networking } = item;
   const STORAGES = ['nfs-csi', 'ceph-csi', 'cinder'];
-  const PLUGINS = ['kubesphere', 'metallb'];
+  const PLUGINS = ['kubesphere'];
 
   const components = Object.fromEntries(
     item.addons?.map((c) => [c.name, c.config]) || []

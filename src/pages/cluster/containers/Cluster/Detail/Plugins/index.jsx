@@ -32,7 +32,6 @@ function Plugins() {
 
   const plugin = toJS(get(store.detail, 'plugin'));
   const kubesphere = plugin.filter((item) => item.name === 'kubesphere');
-  const metallb = plugin.filter((item) => item.name === 'metallb');
 
   const KSCard = kubesphere.map((item) => {
     const { config } = item;
@@ -233,87 +232,8 @@ function Plugins() {
     };
   });
 
-  const LBCard = metallb.map((item, index) => {
-    item = toJS(item);
-    const options = [];
-    const itemKeys = Object.keys(item.config);
-    const itemValues = Object.values(item.config);
-
-    for (let i = 0; i < itemKeys.length; i++) {
-      options.push({
-        label: t(`${itemKeys[i]}`),
-        dataIndex: '',
-        render: () => `${itemValues[i]}` || '',
-      });
-    }
-
-    const { version, category, name } = components.find(
-      (component) => component.name === item.name
-    );
-
-    return {
-      title: item.name,
-      options,
-      cardButton: () => {
-        const saveAsTemplateButtonProps = {
-          id: `${item.name}-${index}`,
-          isAllowed: true,
-          title: t('Save as template'),
-          buttonType: 'link',
-          actionType: 'modal',
-          item: {
-            component: item.config,
-            pluginName: name,
-            pluginVersion: version,
-            pluginCategory: category,
-            isPlugin: true,
-          },
-        };
-
-        const isLicensExpiration = () =>
-          checkExpired(store.detail.licenseExpirationTime);
-
-        const isStatusRunning = () => store.detail.status === 'Running';
-
-        const allowed = () =>
-          isLicensExpiration() &&
-          isStatusRunning() &&
-          !isDisableByProviderType(store.detail);
-
-        const deleteButtonProps = {
-          id: `${item.name}-${index}`,
-          isAllowed: allowed(),
-          title: t('Remove'),
-          buttonType: 'link',
-          actionType: 'confirm',
-          danger: true,
-          item: {
-            name: id,
-            component: [item],
-            plugin: toJS(store.detail.plugin),
-            uninstall: true,
-            title: t('Remove Plugin'),
-          },
-        };
-
-        const saveAsTemplateAction = getAction(SaveAsTemplate, [], {});
-        const deleteAction = getAction(Delete, [], {});
-
-        return (
-          <>
-            <ActionButton
-              {...saveAsTemplateButtonProps}
-              action={saveAsTemplateAction}
-            />
-            <ActionButton {...deleteButtonProps} action={deleteAction} />
-          </>
-        );
-      },
-    };
-  });
-
   const currentProps = {
-    cards: [...KSCard, ...LBCard],
+    cards: KSCard,
     store,
   };
 
