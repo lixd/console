@@ -120,6 +120,10 @@ export default class Upgrade extends ModalAction {
     }));
   }
 
+  get isSingleNode() {
+    return this.item.masters?.length === 1 && !(this.item.workers || []).length;
+  }
+
   get formItems() {
     return [
       {
@@ -137,6 +141,11 @@ export default class Upgrade extends ModalAction {
           {
             validator: (_, value) => {
               const { kubernetesVersion: currentVersion } = this.item;
+              if (versionCompare(currentVersion, 'v1.36.4') < 0) {
+                return Promise.reject(
+                  t('Kubernetes upgrades are supported starting from v1.36.4')
+                );
+              }
               const v = versionCompare(currentVersion, value);
               const c = versionCross(currentVersion, value);
 
@@ -147,6 +156,29 @@ export default class Upgrade extends ModalAction {
             },
           },
         ],
+      },
+      {
+        name: 'singleNodeMaintenance',
+        label: t('Single-node maintenance'),
+        type: 'check',
+        hidden: !this.isSingleNode,
+        content: t(
+          'Allow downtime and Pod deletion bypassing all affected PDBs, including application workloads'
+        ),
+        rules: this.isSingleNode
+          ? [
+              {
+                validator: (_, value) =>
+                  value
+                    ? Promise.resolve()
+                    : Promise.reject(
+                        t(
+                          'Confirm single-node maintenance to upgrade this cluster'
+                        )
+                      ),
+              },
+            ]
+          : [],
       },
       {
         name: 'imageRegistry',
@@ -176,8 +208,14 @@ export default class Upgrade extends ModalAction {
     return this.props.item.name;
   }
 
-  onSubmit = ({ version }) =>
-    this.store.upgrade({ version }, { cluster: this.cluster });
+  onSubmit = ({ version, singleNodeMaintenance }) =>
+    this.store.upgrade(
+      {
+        version,
+        singleNodeMaintenance: this.isSingleNode && !!singleNodeMaintenance,
+      },
+      { cluster: this.cluster }
+    );
 
   successCallback = () => this.store.fetchList({ cluster: this.cluster });
 }

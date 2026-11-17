@@ -628,5 +628,9 @@
   "Enter a complete registry address, such as https://harbor.example.com/kubeclipper.": "请输入完整仓库地址，例如 https://harbor.example.com/kubeclipper。",
   "Invalid registry address. Check the registry configuration.": "仓库地址配置错误，请修正仓库配置。",
   "Unable to read the platform default registry. Select an image registry.": "无法读取平台默认仓库，请选择镜像仓库。",
-  "Select an image registry. No platform default is configured.": "平台默认镜像仓库未配置，请选择仓库。"
+  "Select an image registry. No platform default is configured.": "平台默认镜像仓库未配置，请选择仓库。",
+  "Single-node maintenance": "单节点维护",
+  "Allow downtime and Pod deletion bypassing all affected PDBs, including application workloads": "允许业务中断，并删除 Pod，绕过所有受影响的 PDB（包括业务工作负载）",
+  "Confirm single-node maintenance to upgrade this cluster": "请确认单节点维护模式后升级集群",
+  "Kubernetes upgrades are supported starting from v1.36.4": "Kubernetes 升级起始版本为 v1.36.4"
 }

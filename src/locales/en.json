@@ -628,5 +628,9 @@
   "Enter a complete registry address, such as https://harbor.example.com/kubeclipper.": "Enter a complete registry address, such as https://harbor.example.com/kubeclipper.",
   "Invalid registry address. Check the registry configuration.": "Invalid registry address. Check the registry configuration.",
   "Unable to read the platform default registry. Select an image registry.": "Unable to read the platform default registry. Select an image registry.",
-  "Select an image registry. No platform default is configured.": "Select an image registry. No platform default is configured."
+  "Select an image registry. No platform default is configured.": "Select an image registry. No platform default is configured.",
+  "Single-node maintenance": "Single-node maintenance",
+  "Allow downtime and Pod deletion bypassing all affected PDBs, including application workloads": "Allow downtime and Pod deletion bypassing all affected PDBs, including application workloads",
+  "Confirm single-node maintenance to upgrade this cluster": "Confirm single-node maintenance to upgrade this cluster",
+  "Kubernetes upgrades are supported starting from v1.36.4": "Kubernetes upgrades are supported starting from v1.36.4"
 }
